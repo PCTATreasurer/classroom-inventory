@@ -9,9 +9,12 @@
  *   Labels       – printable barcode labels
  *   Planning     – how much of each item you need next year
  *   Order List   – generated shortfall list (need − usable on hand)
+ *   Count Log    – counts sent in by students from the Count Form web page
  *
  * Setup: Extensions ▸ Apps Script ▸ paste this file ▸ Save ▸ reload the sheet ▸
  *        Inventory menu ▸ "1. Set up / import catalog".
+ * Student Count Form: add an HTML file named "Count" (paste Count.html), then
+ *        Deploy ▸ New deployment ▸ Web app ▸ Execute as: Me ▸ Who has access: anyone in your school.
  */
 
 const CATALOG_URL =
@@ -27,10 +30,10 @@ const CAT = { track: 1, pic: 2, stock: 3, desc: 4, unit: 5, cost: 6, section: 7,
 const CAT_HEAD = ['Track?', 'Picture', 'Stock #', 'Description', 'Unit', 'Unit Cost', 'Section', 'Type', 'Image ID'];
 
 const INV = { pic: 1, id: 2, desc: 3, unit: 4, type: 5, mode: 6, loc: 7, onHand: 8, cond: 9,
-              replace: 10, counted: 11, cost: 12, source: 13, img: 14, label: 15, notes: 16 };
+              replace: 10, counted: 11, cost: 12, source: 13, img: 14, label: 15, notes: 16, tip: 17 };
 const INV_HEAD = ['Picture', 'Item ID', 'Description', 'Unit', 'Type', 'Count Mode', 'Location',
                   'On Hand', 'Condition', '# To Replace', 'Last Counted', 'Unit Cost', 'Source',
-                  'Image ID', 'Label?', 'Notes'];
+                  'Image ID', 'Label?', 'Notes', 'Count Tip (students see this)'];
 
 const SCAN_HEAD = ['Scan here ▼', 'Qty', 'Item', 'Mode', 'Time', 'Status'];
 const PLAN_HEAD = ['Item ID', 'Description', 'Unit', 'Per Student', 'Students', 'Extra', 'Total Need', 'Notes'];
@@ -54,6 +57,10 @@ function onOpen() {
     .addItem('Apply Scans → Inventory', 'applyScans')
     .addItem('Clear Scan tab', 'clearScans')
     .addSeparator()
+    .addItem('Review student counts', 'reviewStudentCounts')
+    .addItem('Apply student counts → Inventory', 'applyStudentCounts')
+    .addItem('Show Count Form link', 'showCountFormLink')
+    .addSeparator()
     .addItem('Build barcode labels', 'buildLabels')
     .addSeparator()
     .addItem('Add Inventory items → Planning', 'syncPlanning')
@@ -70,6 +77,7 @@ function setup() {
   ensureSheet_(ss, 'Order List', ORDER_HEAD);
   ensureSheet_(ss, 'Count Sheet', []);
   ensureSheet_(ss, 'Labels', []);
+  ensureSheet_(ss, 'Count Log', LOG_HEAD);
   importCatalog();
   ss.setActiveSheet(ss.getSheetByName('Catalog'));
   toast_('Done. Tick "Track?" on the items you keep, then Inventory ▸ Add checked catalog items.');
@@ -209,6 +217,7 @@ function appendInventory_(inv, rows) {
 }
 
 function formatInventory_(inv) {
+  addTipHeader_(inv);
   if (inv.getLastRow() < 2) return;
   const n = inv.getLastRow() - 1;
   inv.getRange(2, INV.pic, n, 1).setFormulaR1C1(picFormula_(INV.img - INV.pic));
@@ -456,6 +465,181 @@ function buildOrderList() {
   ol.setFrozenRows(1); ol.setColumnWidth(2, 320);
   ss.setActiveSheet(ol);
   toast_(`Order List: ${out.length} line(s). District items use the Stock # for FMS.`);
+}
+
+// ───────────────────────────── Student Count Form (web app) ─────────────────────────────
+// Students open the web app link, type their name, pick an area, count one item per
+// screen, review, and send. Counts land on the "Count Log" tab as "New". Nothing in
+// Inventory changes until you choose Inventory ▸ Apply student counts.
+
+const LOG_HEAD = ['Submitted', 'Student', 'Area', 'Item ID', 'Description', 'Unit', 'Count',
+                  'Damaged / broken', 'Status'];
+const LOG = { time: 1, student: 2, area: 3, id: 4, desc: 5, unit: 6, count: 7, damaged: 8, status: 9 };
+const NO_AREA = 'Other / no area';
+const MAX_COUNT = 9999;
+
+function doGet() {
+  const t = HtmlService.createTemplateFromFile('Count');
+  t.dataJson = JSON.stringify(getCountData_()).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+  return t.evaluate()
+    .setTitle('Supply Count')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/** Items students may count: every Inventory row, grouped by Location. */
+function getCountData_() {
+  const inv = SpreadsheetApp.getActive().getSheetByName('Inventory');
+  if (!inv || inv.getLastRow() < 2) return { areas: [], items: [] };
+  const width = Math.max(INV_HEAD.length, inv.getLastColumn());
+  const items = inv.getRange(2, 1, inv.getLastRow() - 1, width).getValues()
+    .filter(v => String(v[INV.id - 1]).trim())
+    .map(v => ({
+      id: String(v[INV.id - 1]).trim(),
+      desc: String(v[INV.desc - 1]),
+      unit: String(v[INV.unit - 1] || 'Each'),
+      durable: v[INV.type - 1] === 'Durable',
+      area: String(v[INV.loc - 1] || '').trim() || NO_AREA,
+      img: String(v[INV.img - 1] || '').trim(),
+      tip: String(v[INV.tip - 1] || '').trim(),
+    }))
+    .sort((a, b) => a.area.localeCompare(b.area) || a.desc.localeCompare(b.desc));
+  const areas = [...new Set(items.map(i => i.area))];
+  return { areas, items };
+}
+
+/** Called by the Count page. Checks everything again on the server before saving. */
+function submitCounts(p) {
+  const clean = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  const student = clean(p && p.student).slice(0, 40);
+  const area = clean(p && p.area);
+  if (!student) throw new Error('Please type your name.');
+  if (!Array.isArray(p.counts) || !p.counts.length) throw new Error('There are no counts to send.');
+
+  const data = getCountData_();
+  const byId = {};
+  data.items.forEach(i => byId[i.id] = i);
+  const isWhole = n => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_COUNT;
+  const now = new Date();
+  const rows = p.counts.map(c => {
+    const item = byId[String(c.id)];
+    if (!item) throw new Error('An item on this list was removed by your teacher. Reload the page and start again.');
+    if (!isWhole(c.count)) throw new Error('Check the count for "' + item.desc + '". Use a whole number from 0 to ' + MAX_COUNT + '.');
+    let damaged = '';
+    if (item.durable) {
+      if (!isWhole(c.damaged) || c.damaged > c.count) {
+        throw new Error('Check the damaged number for "' + item.desc + '". It can\'t be more than the count.');
+      }
+      damaged = c.damaged;
+    }
+    const safe = v => (typeof v === 'string' && /^[=+\-@]/.test(v)) ? "'" + v : v;
+    return [now, safe(student), safe(area), item.id, item.desc, item.unit, c.count, damaged, 'New'];
+  });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const log = ensureSheet_(SpreadsheetApp.getActive(), 'Count Log', LOG_HEAD);
+    const start = log.getLastRow() + 1;
+    log.getRange(start, LOG.id, rows.length, 1).setNumberFormat('@');
+    log.getRange(start, 1, rows.length, LOG_HEAD.length).setValues(rows);
+    log.getRange(start, LOG.time, rows.length, 1).setNumberFormat('m/d/yyyy h:mm am/pm');
+  } finally {
+    lock.releaseLock();
+  }
+  return { saved: rows.length };
+}
+
+/** Lists the "New" student counts next to the current On Hand so you can spot mistakes. */
+function reviewStudentCounts() {
+  const plan = pendingCounts_();
+  const ui = SpreadsheetApp.getUi();
+  if (!plan.latest.length) return ui.alert('No new student counts.');
+  const lines = plan.latest.map(c => {
+    const was = c.onHand === '' ? 'blank' : c.onHand;
+    const flag = c.onHand !== '' && Math.abs(c.count - c.onHand) >= Math.max(5, c.onHand * 0.5) ? '  ⚠ big change' : '';
+    return c.desc.slice(0, 40) + ': ' + was + ' → ' + c.count +
+      (c.damaged !== '' ? ' (' + c.damaged + ' damaged)' : '') + '  — ' + c.student + flag;
+  });
+  ui.alert('New student counts (' + plan.latest.length + ')', lines.join('\n') +
+    (plan.duplicates ? '\n\n' + plan.duplicates + ' item(s) were counted more than once; the newest count is shown.' : '') +
+    '\n\nTo fix one, edit the Count column on the Count Log tab. Then use "Apply student counts".',
+    ui.ButtonSet.OK);
+}
+
+function pendingCounts_() {
+  const ss = SpreadsheetApp.getActive();
+  const log = ss.getSheetByName('Count Log');
+  const out = { latest: [], rows: [], duplicates: 0 };
+  if (!log || log.getLastRow() < 2) return out;
+  const vals = log.getRange(2, 1, log.getLastRow() - 1, LOG_HEAD.length).getValues();
+  const inv = ss.getSheetByName('Inventory');
+  const onHand = {};
+  if (inv.getLastRow() > 1) {
+    inv.getRange(2, 1, inv.getLastRow() - 1, INV_HEAD.length).getValues()
+      .forEach(v => onHand[String(v[INV.id - 1])] = v[INV.onHand - 1]);
+  }
+  const latest = {};
+  vals.forEach((r, i) => {
+    if (r[LOG.status - 1] !== 'New') return;
+    const id = String(r[LOG.id - 1]);
+    if (latest[id]) out.duplicates++;
+    out.rows.push({ row: i + 2, id });
+    latest[id] = {
+      row: i + 2, id, desc: String(r[LOG.desc - 1]), student: String(r[LOG.student - 1]),
+      count: Number(r[LOG.count - 1]), damaged: r[LOG.damaged - 1] === '' ? '' : Number(r[LOG.damaged - 1]),
+      onHand: onHand[id] === undefined ? '' : onHand[id],
+    };
+  });
+  out.latest = Object.values(latest);
+  return out;
+}
+
+/** Copies the newest "New" count per item into Inventory and marks the log rows. */
+function applyStudentCounts() {
+  const plan = pendingCounts_();
+  const ui = SpreadsheetApp.getUi();
+  if (!plan.latest.length) return ui.alert('No new student counts.');
+  const ok = ui.alert('Apply student counts',
+    'Set On Hand for ' + plan.latest.length + ' item(s) from the newest student counts?\n' +
+    '(Use "Review student counts" first if you have not checked them.)', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  const totals = {}, extras = {};
+  plan.latest.forEach(c => {
+    totals[c.id] = c.count;
+    if (c.damaged !== '') extras[c.id] = { cond: '', replace: c.damaged };
+  });
+  setOnHand_(totals, extras);
+  const log = SpreadsheetApp.getActive().getSheetByName('Count Log');
+  const keep = new Set(plan.latest.map(c => c.row));
+  plan.rows.forEach(r => log.getRange(r.row, LOG.status).setValue(keep.has(r.row) ? 'Applied' : 'Skipped (newer count used)'));
+  toast_('Inventory updated from ' + plan.latest.length + ' student count(s).');
+}
+
+function showCountFormLink() {
+  let url = '';
+  try { url = ScriptApp.getService().getUrl() || ''; } catch (err) { url = ''; }
+  const ui = SpreadsheetApp.getUi();
+  if (!url) {
+    return ui.alert('Count Form not deployed yet',
+      'In Apps Script: Deploy ▸ New deployment ▸ gear ▸ Web app.\n' +
+      'Execute as: Me.  Who has access: Anyone within your school (or "Anyone").\n' +
+      'Then copy the Web app URL (it ends in /exec) and share it with students.', ui.ButtonSet.OK);
+  }
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font-family:Arial;font-size:14px">Share this link with students:<br><br>' +
+    '<input style="width:100%;font-size:13px;padding:6px" readonly onclick="this.select()" value="' +
+    url.replace(/"/g, '&quot;') + '"><br><br>Tip: post it on Canvas or make a QR code for the cabinet door.</div>')
+    .setWidth(520).setHeight(170);
+  ui.showModalDialog(html, 'Count Form link');
+}
+
+function addTipHeader_(inv) {
+  const cell = inv.getRange(1, INV.tip);
+  if (cell.getValue() === '') {
+    cell.setValue(INV_HEAD[INV.tip - 1]).setFontWeight('bold').setBackground('#d9ead3')
+      .setNote('Optional. A short counting tip students see, e.g. "Count the boxes, not the pens inside."');
+  }
 }
 
 // ───────────────────────────── Helpers ─────────────────────────────
