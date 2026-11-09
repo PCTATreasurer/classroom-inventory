@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supply Count</title>
+<style>
+  :root {
+    --ink: #1d2733; --muted: #5b6776; --line: #d5dbe3; --bg: #f3f5f8; --card: #fff;
+    --blue: #1a56db; --blue-dark: #1442a8; --green: #127a3d; --red: #b42318; --red-bg: #fdecea;
+    --yellow-bg: #fff6d6; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", Roboto, Arial, sans-serif; font-size: 18px; line-height: 1.4; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 16px 14px 40px; }
+  h1 { font-size: 26px; margin: 4px 0 4px; }
+  h2 { font-size: 22px; margin: 0 0 6px; }
+  p { margin: 6px 0; }
+  .muted { color: var(--muted); font-size: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px; margin-top: 14px; }
+  label.field { display: block; font-weight: 600; margin: 14px 0 6px; }
+  input[type=text], select {
+    width: 100%; font-size: 20px; padding: 12px; border: 2px solid var(--line); border-radius: 10px;
+    background: #fff; color: var(--ink); }
+  input:focus, select:focus, button:focus-visible { outline: 3px solid #93b4f5; outline-offset: 1px; border-color: var(--blue); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 56px; padding: 0 22px; font-size: 20px; font-weight: 700; border-radius: 12px;
+    border: 2px solid var(--blue); background: var(--blue); color: #fff; cursor: pointer; }
+  .btn:hover { background: var(--blue-dark); }
+  .btn.secondary { background: #fff; color: var(--blue); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.wide { width: 100%; }
+  .row { display: flex; gap: 10px; margin-top: 18px; }
+  .row .btn { flex: 1; }
+  .hidden { display: none !important; }
+
+  /* progress */
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .step { font-weight: 700; font-size: 18px; }
+  .area-chip { font-size: 15px; color: var(--muted); text-align: right; }
+  .bar { height: 10px; background: #e3e8ef; border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
+  .bar > div { height: 100%; background: var(--green); width: 0; transition: width .2s; }
+
+  /* item */
+  .pic { width: 100%; height: 240px; background: #f7f8fa; border: 1px solid var(--line); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .nopic { color: var(--muted); font-size: 16px; text-align: center; }
+  .nopic b { display: block; font-size: 44px; line-height: 1; margin-bottom: 6px; }
+  .item-name { font-size: 24px; font-weight: 800; margin: 14px 0 2px; }
+  .item-id { font-size: 15px; color: var(--muted); }
+  .countby { margin-top: 12px; background: #eef3ff; border: 1px solid #c9d8fb; border-radius: 10px; padding: 10px 12px; }
+  .countby b { font-size: 20px; }
+  .tip { margin-top: 8px; background: var(--yellow-bg); border: 1px solid #f0d98a; border-radius: 10px; padding: 10px 12px; font-size: 17px; }
+
+  .q { font-weight: 700; font-size: 20px; margin: 20px 0 8px; }
+  .stepper { display: flex; align-items: stretch; gap: 10px; }
+  .stepper button { width: 64px; min-height: 64px; font-size: 32px; font-weight: 700; border-radius: 12px;
+    border: 2px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  .stepper button:active { background: #eef1f5; }
+  .stepper input { flex: 1; min-width: 0; text-align: center; font-size: 34px; font-weight: 800; padding: 6px;
+    border: 3px solid var(--line); border-radius: 12px; }
+  .stepper input.bad { border-color: var(--red); background: var(--red-bg); }
+  .none-btn { margin-top: 10px; background: none; border: none; color: var(--blue); font-size: 17px;
+    font-weight: 600; text-decoration: underline; cursor: pointer; padding: 6px 0; }
+
+  .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-weight: 600; font-size: 17px; }
+  .msg.err { background: var(--red-bg); color: var(--red); border: 1px solid #f4b4ad; }
+  .msg.warn { background: var(--yellow-bg); color: #7a5a00; border: 1px solid #f0d98a; }
+
+  /* review */
+  table { width: 100%; border-collapse: collapse; font-size: 17px; }
+  th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  td.num { font-weight: 800; font-size: 20px; text-align: center; white-space: nowrap; }
+  .edit { background: none; border: 2px solid var(--line); border-radius: 8px; padding: 6px 10px;
+    font-size: 15px; font-weight: 700; color: var(--blue); cursor: pointer; }
+  .done-big { font-size: 64px; text-align: center; line-height: 1; margin: 10px 0; color: var(--green); }
+  .center { text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 1. START -->
+  <section id="start">
+    <h1>Supply Count</h1>
+    <p class="muted">You will see one item at a time. Count it carefully, type the number, then tap <b>Next</b>.</p>
+    <div class="card">
+      <label class="field" for="student">Your name (first name and last initial)</label>
+      <input type="text" id="student" maxlength="40" autocomplete="off" placeholder="Example: Maria G.">
+      <div id="areaBox">
+        <label class="field" for="area">Which area are you counting?</label>
+        <select id="area"></select>
+      </div>
+      <div id="startErr" class="msg err hidden" role="alert"></div>
+      <div class="row"><button class="btn wide" id="startBtn" type="button">Start counting</button></div>
+    </div>
+    <div id="resumeBox" class="card hidden">
+      <p><b>You have a count in progress.</b></p>
+      <p class="muted" id="resumeText"></p>
+      <div class="row">
+        <button class="btn" id="resumeBtn" type="button">Keep going</button>
+        <button class="btn secondary" id="discardBtn" type="button">Start over</button>
+      </div>
+    </div>
+    <div id="emptyBox" class="card hidden"><p><b>There is nothing to count yet.</b></p>
+      <p class="muted">Ask your teacher to add items to the Inventory tab.</p></div>
+  </section>
+
+  <!-- 2. ONE ITEM -->
+  <section id="item" class="hidden">
+    <div class="top"><span class="step" id="stepText"></span><span class="area-chip" id="areaChip"></span></div>
+    <div class="bar"><div id="barFill"></div></div>
+    <div class="card">
+      <div class="pic" id="pic"></div>
+      <div class="item-name" id="itemName"></div>
+      <div class="item-id" id="itemId"></div>
+      <div class="countby">Count every: <b id="unitText"></b><div class="muted" id="unitHelp"></div></div>
+      <div class="tip hidden" id="tipBox"></div>
+
+      <div class="q" id="countQ">How many did you count?</div>
+      <div class="stepper">
+        <button type="button" id="minus" aria-label="Subtract 1">−</button>
+        <input id="count" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-labelledby="countQ">
+        <button type="button" id="plus" aria-label="Add 1">+</button>
+      </div>
+      <button type="button" class="none-btn" id="noneBtn">There are none here (0)</button>
+
+      <div id="damagedBox" class="hidden">
+        <div class="q" id="damQ">How many of them are damaged or broken?</div>
+        <div class="stepper">
+          <button type="button" id="dminus" aria-label="Subtract 1">−</button>
+          <input id="damaged" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-labelledby="damQ">
+          <button type="button" id="dplus" aria-label="Add 1">+</button>
+        </div>
+        <p class="muted">Type 0 if they all work fine.</p>
+      </div>
+
+      <div id="itemMsg" class="msg hidden" role="alert"></div>
+      <div class="row">
+        <button class="btn secondary" id="backBtn" type="button">Back</button>
+        <button class="btn" id="nextBtn" type="button">Next</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. REVIEW -->
+  <section id="review" class="hidden">
+    <h1>Check your counts</h1>
+    <p class="muted">Look over every number. Tap <b>Fix</b> to change one. When everything is right, tap <b>Send my counts</b>.</p>
+    <div class="card">
+      <table>
+        <thead><tr><th>Item</th><th class="center">Count</th><th></th></tr></thead>
+        <tbody id="reviewBody"></tbody>
+      </table>
+      <div id="sendMsg" class="msg hidden" role="alert"></div>
+      <div class="row"><button class="btn wide" id="sendBtn" type="button">Send my counts</button></div>
+    </div>
+  </section>
+
+  <!-- 4. DONE -->
+  <section id="done" class="hidden">
+    <div class="card center">
+      <div class="done-big">✓</div>
+      <h2 id="doneTitle">Thank you!</h2>
+      <p id="doneText"></p>
+      <div class="row"><button class="btn wide" id="againBtn" type="button">Count another area</button></div>
+    </div>
+  </section>
+</div>
+
+<script>
+var DATA = <?!= dataJson ?>;
+var MAX = 9999;
+var BIG = 500;            // counts above this need a second tap to confirm
+var KEY = 'supplyCount:v1';
+
+var $ = function (id) { return document.getElementById(id); };
+var state = null;         // { student, area, ids: [...], i, counts: {id: {count, damaged}}, confirmedBig: {id:true} }
+var byId = {};
+DATA.items.forEach(function (it) { byId[it.id] = it; });
+
+function show(id) {
+  ['start', 'item', 'review', 'done'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); });
+  window.scrollTo(0, 0);
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+function clearSaved() { try { localStorage.removeItem(KEY); } catch (e) {} }
+function loadSaved() {
+  try {
+    var s = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (s && s.ids && s.ids.every(function (id) { return byId[id]; })) return s;
+  } catch (e) {}
+  return null;
+}
+
+/* ---------- unit wording ---------- */
+// fix plural for help text
+function plural(n) { return /(s|x|ch|sh)$/.test(n) ? n + 'es' : n + 's'; }
+function unitInfo(u) {
+  var raw = String(u || 'Each').trim();
+  var m = raw.match(/^([A-Za-z]+)\s*\/\s*(\d+)/);
+  if (/^each$/i.test(raw) || !raw) return { big: 'one item (each)', help: 'Count every single one.' };
+  if (m) {
+    var names = { pkg: 'package', box: 'box', bx: 'box', set: 'set', pk: 'pack', pack: 'pack', cs: 'case', case: 'case', ctn: 'carton', bag: 'bag', roll: 'roll', ream: 'ream' };
+    var name = names[m[1].toLowerCase()] || m[1].toLowerCase();
+    return { big: name + ' of ' + m[2], help: 'Count whole ' + plural(name) + '. Do not count the pieces inside.' };
+  }
+  var n = raw.toLowerCase();
+  return { big: n, help: 'Count each ' + n + '.' };
+}
+
+/* ---------- start ---------- */
+function initStart() {
+  if (!DATA.items.length) {
+    $('emptyBox').classList.remove('hidden');
+    $('startBtn').disabled = true;
+    return;
+  }
+  var sel = $('area');
+  sel.innerHTML = '';
+  if (DATA.areas.length > 1) {
+    var ph = document.createElement('option'); ph.value = ''; ph.textContent = 'Choose an area…'; sel.appendChild(ph);
+  }
+  DATA.areas.forEach(function (a) {
+    var n = DATA.items.filter(function (it) { return it.area === a; }).length;
+    var o = document.createElement('option'); o.value = a; o.textContent = a + '  (' + n + ' item' + (n === 1 ? '' : 's') + ')';
+    sel.appendChild(o);
+  });
+  if (DATA.areas.length === 1) $('areaBox').classList.add('hidden');
+
+  var saved = loadSaved();
+  if (saved) {
+    $('resumeBox').classList.remove('hidden');
+    var done = Object.keys(saved.counts).length;
+    $('resumeText').textContent = saved.student + ' — ' + saved.area + ' — ' + done + ' of ' + saved.ids.length + ' items counted.';
+    $('resumeBtn').onclick = function () {
+      state = saved;
+      if (state.i >= state.ids.length) showReview();
+      else { if (state.reviewReturn && !state.counts[state.ids[state.i]]) state.reviewReturn = false; showItem(); }
+    };
+    $('discardBtn').onclick = function () { clearSaved(); $('resumeBox').classList.add('hidden'); };
+  }
+}
+
+$('startBtn').onclick = function () {
+  var name = $('student').value.replace(/\s+/g, ' ').trim();
+  var area = DATA.areas.length === 1 ? DATA.areas[0] : $('area').value;
+  var err = '';
+  if (name.length < 2) err = 'Please type your name.';
+  else if (!area) err = 'Please choose the area you are counting.';
+  $('startErr').textContent = err;
+  $('startErr').classList.toggle('hidden', !err);
+  if (err) return;
+  var ids = DATA.items.filter(function (it) { return it.area === area; }).map(function (it) { return it.id; });
+  state = { student: name, area: area, ids: ids, i: 0, counts: {}, confirmedBig: {} };
+  save();
+  showItem();
+};
+
+/* ---------- one item ---------- */
+function cleanNum(v) { return String(v).replace(/[^\d]/g, '').slice(0, 4); }
+
+function showItem() {
+  var id = state.ids[state.i], it = byId[id], n = state.ids.length;
+  $('stepText').textContent = 'Item ' + (state.i + 1) + ' of ' + n;
+  $('areaChip').textContent = state.area;
+  $('barFill').style.width = Math.round(state.i / n * 100) + '%';
+
+  var pic = $('pic');
+  pic.innerHTML = '';
+  if (it.img) {
+    var img = document.createElement('img');
+    img.alt = it.desc;
+    img.src = 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(it.img) + '&sz=w600';
+    img.onerror = function () { pic.innerHTML = '<div class="nopic"><b>📦</b>Picture not available</div>'; };
+    pic.appendChild(img);
+  } else {
+    pic.innerHTML = '<div class="nopic"><b>📦</b>No picture for this item</div>';
+  }
+  $('itemName').textContent = it.desc;
+  $('itemId').textContent = 'Item # ' + it.id;
+  var u = unitInfo(it.unit);
+  $('unitText').textContent = u.big;
+  $('unitHelp').textContent = u.help;
+  $('tipBox').textContent = it.tip ? 'Tip: ' + it.tip : '';
+  $('tipBox').classList.toggle('hidden', !it.tip);
+
+  var prev = state.counts[id];
+  $('count').value = prev ? String(prev.count) : '';
+  $('damagedBox').classList.toggle('hidden', !it.durable);
+  $('damaged').value = prev && it.durable ? String(prev.damaged) : (it.durable ? '0' : '');
+  $('count').classList.remove('bad'); $('damaged').classList.remove('bad');
+  hideMsg();
+  $('nextBtn').textContent = state.i === n - 1 ? 'Check my counts' : 'Next';
+  show('item');
+  setTimeout(function () { $('count').focus(); }, 50);
+}
+
+function msg(text, kind) {
+  var m = $('itemMsg');
+  m.textContent = text; m.className = 'msg ' + kind;
+}
+function hideMsg() { $('itemMsg').className = 'msg hidden'; }
+
+function bump(inputId, d) {
+  var el = $(inputId);
+  var v = el.value === '' ? 0 : parseInt(el.value, 10);
+  v = Math.max(0, Math.min(MAX, v + d));
+  el.value = String(v);
+  el.classList.remove('bad'); hideMsg();
+}
+$('minus').onclick = function () { bump('count', -1); };
+$('plus').onclick = function () { bump('count', 1); };
+$('dminus').onclick = function () { bump('damaged', -1); };
+$('dplus').onclick = function () { bump('damaged', 1); };
+['count', 'damaged'].forEach(function (k) {
+  $(k).addEventListener('input', function () {
+    var c = cleanNum(this.value);
+    if (c !== this.value) this.value = c;
+    this.classList.remove('bad'); hideMsg();
+    if (k === 'count') delete state.confirmedBig[state.ids[state.i]];
+  });
+  $(k).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('nextBtn').click(); } });
+});
+$('noneBtn').onclick = function () {
+  $('count').value = '0'; $('damaged').value = '0';
+  $('count').classList.remove('bad'); hideMsg();
+};
+
+/** Returns true when this item's answers are complete and saved. */
+function commitItem() {
+  var id = state.ids[state.i], it = byId[id];
+  var cv = $('count').value.trim();
+  if (cv === '') { $('count').classList.add('bad'); msg('Type how many you counted. If there are none, tap "There are none here (0)".', 'err'); $('count').focus(); return false; }
+  if (!/^\d+$/.test(cv)) { $('count').classList.add('bad'); msg('Use whole numbers only, like 12.', 'err'); return false; }
+  var count = parseInt(cv, 10);
+  var damaged = '';
+  if (it.durable) {
+    var dv = $('damaged').value.trim();
+    if (dv === '' || !/^\d+$/.test(dv)) { $('damaged').classList.add('bad'); msg('Type how many are damaged or broken. Type 0 if none.', 'err'); $('damaged').focus(); return false; }
+    damaged = parseInt(dv, 10);
+    if (damaged > count) { $('damaged').classList.add('bad'); msg('The damaged number can\'t be bigger than the total count (' + count + ').', 'err'); $('damaged').focus(); return false; }
+  }
+  if (count > BIG && !state.confirmedBig[id]) {
+    state.confirmedBig[id] = true;
+    msg(count + ' is a lot! Count again to be sure. If ' + count + ' is right, tap the button again.', 'warn');
+    return false;
+  }
+  state.counts[id] = { count: count, damaged: damaged };
+  save();
+  return true;
+}
+
+$('nextBtn').onclick = function () {
+  if (!commitItem()) return;
+  if (state.reviewReturn) { state.reviewReturn = false; state.i = state.ids.length; save(); showReview(); return; }
+  if (state.i < state.ids.length - 1) { state.i++; save(); showItem(); }
+  else { state.i = state.ids.length; save(); showReview(); }
+};
+$('backBtn').onclick = function () {
+  if (state.i === 0) { show('start'); initStart(); return; }
+  state.reviewReturn = false;
+  state.i--; save(); showItem();
+};
+
+/* ---------- review ---------- */
+function showReview() {
+  var body = $('reviewBody');
+  body.innerHTML = '';
+  state.ids.forEach(function (id, idx) {
+    var it = byId[id], c = state.counts[id];
+    var tr = document.createElement('tr');
+    var td1 = document.createElement('td');
+    td1.innerHTML = '<b></b><div class="muted"></div>';
+    td1.querySelector('b').textContent = it.desc;
+    td1.querySelector('div').textContent = unitInfo(it.unit).big + (it.durable && c ? ' · ' + c.damaged + ' damaged' : '');
+    var td2 = document.createElement('td'); td2.className = 'num';
+    td2.textContent = c ? String(c.count) : '—';
+    var td3 = document.createElement('td');
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'edit'; b.textContent = 'Fix';
+    b.onclick = function () { state.i = idx; state.reviewReturn = true; save(); showItem(); };
+    td3.appendChild(b);
+    tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+    body.appendChild(tr);
+  });
+  var missing = state.ids.filter(function (id) { return !state.counts[id]; }).length;
+  $('sendBtn').disabled = missing > 0;
+  var sm = $('sendMsg');
+  if (missing) { sm.textContent = missing + ' item(s) still need a count. Tap Fix next to the item with a dash.'; sm.className = 'msg err'; }
+  else sm.className = 'msg hidden';
+  show('review');
+}
+
+$('sendBtn').onclick = function () {
+  var btn = this;
+  btn.disabled = true; btn.textContent = 'Sending…';
+  $('sendMsg').className = 'msg hidden';
+  var payload = {
+    student: state.student, area: state.area,
+    counts: state.ids.map(function (id) { var c = state.counts[id]; return { id: id, count: c.count, damaged: c.damaged }; })
+  };
+  google.script.run
+    .withSuccessHandler(function (r) {
+      clearSaved();
+      $('doneTitle').textContent = 'Thank you, ' + state.student + '!';
+      $('doneText').textContent = 'Your ' + r.saved + ' count' + (r.saved === 1 ? '' : 's') + ' for ' + state.area + ' were sent to your teacher.';
+      btn.disabled = false; btn.textContent = 'Send my counts';
+      show('done');
+    })
+    .withFailureHandler(function (e) {
+      btn.disabled = false; btn.textContent = 'Send my counts';
+      var sm = $('sendMsg');
+      sm.textContent = (e && e.message ? e.message : 'Something went wrong.') + ' Your counts are still here — try sending again.';
+      sm.className = 'msg err';
+    })
+    .submitCounts(payload);
+};
+
+$('againBtn').onclick = function () {
+  var name = state ? state.student : '';
+  state = null;
+  show('start'); initStart();
+  $('student').value = name;
+  $('area').value = '';
+};
+
+initStart();
+</script>
+</body>
+</html>
