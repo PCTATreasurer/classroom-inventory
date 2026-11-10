@@ -478,13 +478,32 @@ const LOG = { time: 1, student: 2, area: 3, id: 4, desc: 5, unit: 6, count: 7, d
 const NO_AREA = 'Other / no area';
 const MAX_COUNT = 9999;
 
-function doGet() {
+// The public student page (GitHub Pages), ending in a slash. "Show Count Form link" shares this when set.
+const COUNT_SITE_URL = 'https://pctatreasurer.github.io/classroom-inventory/';
+
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  // JSON API used by the student page on COUNT_SITE_URL (works for students signed in to any Google account)
+  if (p.api === 'data') return json_({ ok: true, data: getCountData_() });
   const t = HtmlService.createTemplateFromFile('Count');
   t.dataJson = JSON.stringify(getCountData_()).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026');
   return t.evaluate()
     .setTitle('Supply Count')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/** Receives counts from the student page on COUNT_SITE_URL. */
+function doPost(e) {
+  try {
+    return json_({ ok: true, result: submitCounts(JSON.parse(e.postData.contents)) });
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message ? err.message : err) });
+  }
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
 /** Items students may count: every Inventory row, grouped by Location. */
@@ -617,8 +636,8 @@ function applyStudentCounts() {
 }
 
 function showCountFormLink() {
-  let url = '';
-  try { url = ScriptApp.getService().getUrl() || ''; } catch (err) { url = ''; }
+  let url = COUNT_SITE_URL;
+  if (!url) { try { url = ScriptApp.getService().getUrl() || ''; } catch (err) { url = ''; } }
   const ui = SpreadsheetApp.getUi();
   if (!url) {
     return ui.alert('Count Form not deployed yet',
