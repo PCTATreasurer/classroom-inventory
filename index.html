@@ -7,7 +7,7 @@
 <style>
   :root {
     --ink: #1d2733; --muted: #5b6776; --line: #d5dbe3; --bg: #f3f5f8; --card: #fff;
-    --blue: #1a56db; --blue-dark: #1442a8; --green: #127a3d; --red: #b42318; --red-bg: #fdecea;
+    --blue: #1a56db; --blue-dark: #1442a8; --green: #127a3d; --green-bg: #e7f6ec; --red: #b42318; --red-bg: #fdecea;
     --yellow-bg: #fff6d6; --radius: 14px;
   }
   * { box-sizing: border-box; }
@@ -25,23 +25,40 @@
     width: 100%; font-size: 20px; padding: 12px; border: 2px solid var(--line); border-radius: 10px;
     background: #fff; color: var(--ink); }
   input:focus, select:focus, button:focus-visible { outline: 3px solid #93b4f5; outline-offset: 1px; border-color: var(--blue); }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     min-height: 56px; padding: 0 22px; font-size: 20px; font-weight: 700; border-radius: 12px;
     border: 2px solid var(--blue); background: var(--blue); color: #fff; cursor: pointer; }
   .btn:hover { background: var(--blue-dark); }
   .btn.secondary { background: #fff; color: var(--blue); }
+  .btn.big { min-height: 72px; font-size: 22px; }
   .btn:disabled { opacity: .5; cursor: default; }
   .btn.wide { width: 100%; }
   .row { display: flex; gap: 10px; margin-top: 18px; }
   .row .btn { flex: 1; }
   .hidden { display: none !important; }
 
-  /* progress */
-  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .step { font-weight: 700; font-size: 18px; }
-  .area-chip { font-size: 15px; color: var(--muted); text-align: right; }
-  .bar { height: 10px; background: #e3e8ef; border-radius: 99px; overflow: hidden; margin: 8px 0 4px; }
-  .bar > div { height: 100%; background: var(--green); width: 0; transition: width .2s; }
+  /* scan screen */
+  .hello { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .hello b { font-size: 20px; }
+  .cam { margin-top: 14px; border-radius: 12px; overflow: hidden; background: #111; position: relative; }
+  .cam video { width: 100%; display: block; max-height: 320px; object-fit: cover; }
+  .cam .aim { position: absolute; left: 12%; right: 12%; top: 32%; bottom: 32%; border: 3px solid #4ade80;
+    border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,.25); pointer-events: none; }
+  #camLib { width: 100%; }
+  .cam-help { text-align: center; color: var(--muted); font-size: 16px; margin: 8px 0 0; }
+  .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; margin: 18px 0 4px; }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .find { display: flex; gap: 10px; }
+  .find input { flex: 1; min-width: 0; }
+  .find .btn { min-height: 52px; padding: 0 18px; }
+  .results { margin-top: 10px; }
+  .result { display: flex; width: 100%; text-align: left; gap: 10px; align-items: center; background: #fff;
+    border: 2px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 17px; cursor: pointer; color: var(--ink); }
+  .result:hover { border-color: var(--blue); }
+  .result small { color: var(--muted); display: block; font-size: 14px; }
+  .done-list { margin: 8px 0 0; padding: 0; list-style: none; }
+  .done-list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+  .done-list li b { white-space: nowrap; }
 
   /* item */
   .pic { width: 100%; height: 240px; background: #f7f8fa; border: 1px solid var(--line); border-radius: 12px;
@@ -69,6 +86,7 @@
   .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-weight: 600; font-size: 17px; }
   .msg.err { background: var(--red-bg); color: var(--red); border: 1px solid #f4b4ad; }
   .msg.warn { background: var(--yellow-bg); color: #7a5a00; border: 1px solid #f0d98a; }
+  .msg.ok { background: var(--green-bg); color: var(--green); border: 1px solid #a7dcb8; }
 
   /* review */
   table { width: 100%; border-collapse: collapse; font-size: 17px; }
@@ -76,7 +94,8 @@
   th { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
   td.num { font-weight: 800; font-size: 20px; text-align: center; white-space: nowrap; }
   .edit { background: none; border: 2px solid var(--line); border-radius: 8px; padding: 6px 10px;
-    font-size: 15px; font-weight: 700; color: var(--blue); cursor: pointer; }
+    font-size: 15px; font-weight: 700; color: var(--blue); cursor: pointer; margin: 2px 0; }
+  .edit.del { color: var(--red); }
   .done-big { font-size: 64px; text-align: center; line-height: 1; margin: 10px 0; color: var(--green); }
   .center { text-align: center; }
 </style>
@@ -87,14 +106,10 @@
   <!-- 1. START -->
   <section id="start">
     <h1>Supply Count</h1>
-    <p class="muted">You will see one item at a time. Count it carefully, type the number, then tap <b>Next</b>.</p>
+    <p class="muted">Scan or type each item's number, count it, and save. When you're done, check your list and send it.</p>
     <div class="card">
       <label class="field" for="student">Your name (first name and last initial)</label>
       <input type="text" id="student" maxlength="40" autocomplete="off" placeholder="Example: Maria G.">
-      <div id="areaBox">
-        <label class="field" for="area">Which area are you counting?</label>
-        <select id="area"></select>
-      </div>
       <div id="startErr" class="msg err hidden" role="alert"></div>
       <div class="row"><button class="btn wide" id="startBtn" type="button">Start counting</button></div>
     </div>
@@ -110,16 +125,46 @@
       <p class="muted">Ask your teacher to add items to the Inventory tab.</p></div>
   </section>
 
-  <!-- 2. ONE ITEM -->
+  <!-- 2. SCAN / FIND -->
+  <section id="scan" class="hidden">
+    <div class="hello"><b id="helloName"></b><span class="muted" id="countedText"></span></div>
+    <div id="savedMsg" class="msg ok hidden" role="status"></div>
+    <div class="card">
+      <h2>Find the next item</h2>
+      <button class="btn big wide" id="camBtn" type="button">📷 Scan a barcode</button>
+      <div id="camBox" class="hidden">
+        <div class="cam" id="camNative"><video id="camVideo" playsinline muted></video><div class="aim"></div></div>
+        <div id="camLib" class="hidden"></div>
+        <p class="cam-help">Hold the barcode inside the green box. Keep it steady.</p>
+        <div class="row"><button class="btn secondary wide" id="camStop" type="button">Stop camera</button></div>
+      </div>
+
+      <div class="or">or type the item number</div>
+      <div class="find">
+        <input type="text" id="code" autocomplete="off" placeholder="Item # or name" aria-label="Item number or name">
+        <button class="btn" id="findBtn" type="button">Find</button>
+      </div>
+      <div id="scanMsg" class="msg hidden" role="alert"></div>
+      <div id="results" class="results"></div>
+    </div>
+
+    <div class="card" id="soFar">
+      <h2>Counted so far</h2>
+      <p class="muted" id="noneYet">Nothing yet. Scan or type your first item.</p>
+      <ul class="done-list" id="doneList"></ul>
+      <div class="row"><button class="btn wide" id="toReview" type="button">I'm done — check my counts</button></div>
+    </div>
+  </section>
+
+  <!-- 3. ONE ITEM -->
   <section id="item" class="hidden">
-    <div class="top"><span class="step" id="stepText"></span><span class="area-chip" id="areaChip"></span></div>
-    <div class="bar"><div id="barFill"></div></div>
     <div class="card">
       <div class="pic" id="pic"></div>
       <div class="item-name" id="itemName"></div>
       <div class="item-id" id="itemId"></div>
       <div class="countby">Count every: <b id="unitText"></b><div class="muted" id="unitHelp"></div></div>
       <div class="tip hidden" id="tipBox"></div>
+      <div id="againMsg" class="msg warn hidden"></div>
 
       <div class="q" id="countQ">How many did you count?</div>
       <div class="stepper">
@@ -141,16 +186,16 @@
 
       <div id="itemMsg" class="msg hidden" role="alert"></div>
       <div class="row">
-        <button class="btn secondary" id="backBtn" type="button">Back</button>
-        <button class="btn" id="nextBtn" type="button">Next</button>
+        <button class="btn secondary" id="backBtn" type="button">Cancel</button>
+        <button class="btn" id="saveBtn" type="button">Save count</button>
       </div>
     </div>
   </section>
 
-  <!-- 3. REVIEW -->
+  <!-- 4. REVIEW -->
   <section id="review" class="hidden">
     <h1>Check your counts</h1>
-    <p class="muted">Look over every number. Tap <b>Fix</b> to change one. When everything is right, tap <b>Send my counts</b>.</p>
+    <p class="muted">Look over every number. Tap <b>Fix</b> to change one or <b>Remove</b> if you scanned the wrong item. When everything is right, tap <b>Send my counts</b>.</p>
     <div class="card">
       <table>
         <thead><tr><th>Item</th><th class="center">Count</th><th></th></tr></thead>
@@ -158,16 +203,17 @@
       </table>
       <div id="sendMsg" class="msg hidden" role="alert"></div>
       <div class="row"><button class="btn wide" id="sendBtn" type="button">Send my counts</button></div>
+      <div class="row"><button class="btn secondary wide" id="moreBtn" type="button">Scan more items</button></div>
     </div>
   </section>
 
-  <!-- 4. DONE -->
+  <!-- 5. DONE -->
   <section id="done" class="hidden">
     <div class="card center">
       <div class="done-big">✓</div>
       <h2 id="doneTitle">Thank you!</h2>
       <p id="doneText"></p>
-      <div class="row"><button class="btn wide" id="againBtn" type="button">Count another area</button></div>
+      <div class="row"><button class="btn wide" id="againBtn" type="button">Start a new count</button></div>
     </div>
   </section>
 </div>
@@ -177,15 +223,42 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwvOqTKtE13zNp95nrm_B5Eym
 var DATA = { areas: [], items: [] };
 var MAX = 9999;
 var BIG = 500;            // counts above this need a second tap to confirm
-var KEY = 'supplyCount:v1';
+var KEY = 'supplyCount:v2';
+var LIB_URL = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
 
 var $ = function (id) { return document.getElementById(id); };
-var state = null;         // { student, area, ids: [...], i, counts: {id: {count, damaged}}, confirmedBig: {id:true} }
-var byId = {};
-DATA.items.forEach(function (it) { byId[it.id] = it; });
+var state = null;         // { student, order: [ids], counts: {id: {count, damaged}}, confirmedBig: {id:true} }
+var current = null;       // id of the item on screen
+var returnTo = 'scan';    // where Save / Cancel go back to
+var byId = {}, byCode = {};
+
+function buildIndex() {
+  byId = {}; byCode = {};
+  DATA.items.forEach(function (it) {
+    byId[it.id] = it;
+    codeKeys(it.id).forEach(function (k) { byCode[k] = it.id; });
+    if (it.barcode) String(it.barcode).split(/[,\s]+/).forEach(function (b) {
+      codeKeys(b).forEach(function (k) { if (!byCode[k]) byCode[k] = it.id; });
+    });
+  });
+}
+/** All the ways a code may be written: as-is, and for numbers, without leading zeros. */
+function codeKeys(raw) {
+  var c = String(raw || '').trim().replace(/^\*+|\*+$/g, '').replace(/\s+/g, '').toUpperCase();
+  if (!c) return [];
+  var keys = [c];
+  if (/^\d+$/.test(c)) keys.push(c.replace(/^0+(?=\d)/, ''));
+  return keys;
+}
+function lookup(raw) {
+  var keys = codeKeys(raw);
+  for (var i = 0; i < keys.length; i++) if (byCode[keys[i]]) return byCode[keys[i]];
+  return null;
+}
+buildIndex();
 
 function show(id) {
-  ['start', 'item', 'review', 'done'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); });
+  ['start', 'scan', 'item', 'review', 'done'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); });
   window.scrollTo(0, 0);
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
@@ -193,13 +266,18 @@ function clearSaved() { try { localStorage.removeItem(KEY); } catch (e) {} }
 function loadSaved() {
   try {
     var s = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (s && s.ids && s.ids.every(function (id) { return byId[id]; })) return s;
+    if (s && s.student && s.order) {
+      s.order = s.order.filter(function (id) { return byId[id] && s.counts[id]; });
+      s.confirmedBig = s.confirmedBig || {};
+      return s;
+    }
   } catch (e) {}
   return null;
 }
+function setMsg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; }
+function hide(el) { el.className = 'msg hidden'; }
 
 /* ---------- unit wording ---------- */
-// fix plural for help text
 function plural(n) { return /(s|x|ch|sh)$/.test(n) ? n + 'es' : n + 's'; }
 function unitInfo(u) {
   var raw = String(u || 'Each').trim();
@@ -221,56 +299,195 @@ function initStart() {
     $('startBtn').disabled = true;
     return;
   }
-  var sel = $('area');
-  sel.innerHTML = '';
-  if (DATA.areas.length > 1) {
-    var ph = document.createElement('option'); ph.value = ''; ph.textContent = 'Choose an area…'; sel.appendChild(ph);
-  }
-  DATA.areas.forEach(function (a) {
-    var n = DATA.items.filter(function (it) { return it.area === a; }).length;
-    var o = document.createElement('option'); o.value = a; o.textContent = a + '  (' + n + ' item' + (n === 1 ? '' : 's') + ')';
-    sel.appendChild(o);
-  });
-  if (DATA.areas.length === 1) $('areaBox').classList.add('hidden');
-
   var saved = loadSaved();
-  if (saved) {
-    $('resumeBox').classList.remove('hidden');
-    var done = Object.keys(saved.counts).length;
-    $('resumeText').textContent = saved.student + ' — ' + saved.area + ' — ' + done + ' of ' + saved.ids.length + ' items counted.';
-    $('resumeBtn').onclick = function () {
-      state = saved;
-      if (state.i >= state.ids.length) showReview();
-      else { if (state.reviewReturn && !state.counts[state.ids[state.i]]) state.reviewReturn = false; showItem(); }
-    };
+  $('resumeBox').classList.toggle('hidden', !saved || !saved.order.length);
+  if (saved && saved.order.length) {
+    $('resumeText').textContent = saved.student + ' — ' + saved.order.length + ' item' + (saved.order.length === 1 ? '' : 's') + ' counted.';
+    $('resumeBtn').onclick = function () { state = saved; showScan(); };
     $('discardBtn').onclick = function () { clearSaved(); $('resumeBox').classList.add('hidden'); };
   }
 }
 
 $('startBtn').onclick = function () {
   var name = $('student').value.replace(/\s+/g, ' ').trim();
-  var area = DATA.areas.length === 1 ? DATA.areas[0] : $('area').value;
-  var err = '';
-  if (name.length < 2) err = 'Please type your name.';
-  else if (!area) err = 'Please choose the area you are counting.';
-  $('startErr').textContent = err;
-  $('startErr').classList.toggle('hidden', !err);
+  var err = name.length < 2 ? 'Please type your name.' : '';
+  setMsg($('startErr'), err, 'err');
   if (err) return;
-  var ids = DATA.items.filter(function (it) { return it.area === area; }).map(function (it) { return it.id; });
-  state = { student: name, area: area, ids: ids, i: 0, counts: {}, confirmedBig: {} };
+  hide($('startErr'));
+  state = { student: name, order: [], counts: {}, confirmedBig: {} };
   save();
-  showItem();
+  showScan();
 };
+$('student').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('startBtn').click(); } });
+
+/* ---------- scan / find screen ---------- */
+function showScan(savedText) {
+  $('helloName').textContent = 'Counting: ' + state.student;
+  var n = state.order.length;
+  $('countedText').textContent = n + ' item' + (n === 1 ? '' : 's') + ' counted';
+  if (savedText) setMsg($('savedMsg'), savedText, 'ok'); else hide($('savedMsg'));
+  hide($('scanMsg'));
+  $('results').innerHTML = '';
+  $('code').value = '';
+  var list = $('doneList');
+  list.innerHTML = '';
+  state.order.slice().reverse().forEach(function (id) {
+    var li = document.createElement('li');
+    var s = document.createElement('span'); s.textContent = byId[id].desc;
+    var b = document.createElement('b'); b.textContent = String(state.counts[id].count);
+    li.appendChild(s); li.appendChild(b); list.appendChild(li);
+  });
+  $('noneYet').classList.toggle('hidden', n > 0);
+  $('toReview').disabled = n === 0;
+  show('scan');
+}
+
+function findTyped() {
+  var raw = $('code').value.trim();
+  $('results').innerHTML = '';
+  if (!raw) { setMsg($('scanMsg'), 'Type the item number from the label, or part of the item name.', 'err'); $('code').focus(); return; }
+  var id = lookup(raw);
+  if (id) { openItem(id, 'scan'); return; }
+  // search by name: every word must appear
+  var words = raw.toLowerCase().split(/\s+/).filter(Boolean);
+  var hits = DATA.items.filter(function (it) {
+    var d = (it.desc + ' ' + it.id).toLowerCase();
+    return words.every(function (w) { return d.indexOf(w) !== -1; });
+  });
+  if (!hits.length) {
+    setMsg($('scanMsg'), 'No item matches "' + raw + '". Check the number on the label and try again, or ask your teacher.', 'err');
+    return;
+  }
+  if (hits.length === 1) { openItem(hits[0].id, 'scan'); return; }
+  setMsg($('scanMsg'), hits.length > 8 ? 'Many items match. Tap the right one or type more of the name.' : 'Tap the item you are counting:', 'warn');
+  hits.slice(0, 8).forEach(function (it) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'result';
+    var t = document.createElement('span');
+    t.textContent = it.desc;
+    var sm = document.createElement('small'); sm.textContent = 'Item # ' + it.id + (state.counts[it.id] ? ' · already counted' : '');
+    t.appendChild(sm); b.appendChild(t);
+    b.onclick = function () { openItem(it.id, 'scan'); };
+    $('results').appendChild(b);
+  });
+}
+$('findBtn').onclick = findTyped;
+$('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); findTyped(); } });
+$('code').addEventListener('input', function () { hide($('scanMsg')); });
+$('toReview').onclick = function () { stopCamera(); showReview(); };
+
+/* ---------- camera ---------- */
+var cam = { stream: null, timer: null, lib: null, on: false };
+
+function isPermissionError(e) {
+  var n = e && e.name;
+  return n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError';
+}
+function camFail(e) {
+  stopCamera();
+  var text = isPermissionError(e)
+    ? 'The camera is blocked. Tap the camera icon in the address bar and choose Allow, or type the item number instead.'
+    : (e && e.name === 'NotFoundError') ? 'No camera was found on this device. Type the item number instead.'
+    : 'The camera could not start. Type the item number instead.';
+  setMsg($('scanMsg'), text, 'err');
+}
+function startCamera() {
+  hide($('scanMsg')); hide($('savedMsg'));
+  $('results').innerHTML = '';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFail({ name: 'NotFoundError' }); return; }
+  cam.on = true;
+  $('camBtn').classList.add('hidden');
+  $('camBox').classList.remove('hidden');
+  if ('BarcodeDetector' in window && window.BarcodeDetector.getSupportedFormats) {
+    window.BarcodeDetector.getSupportedFormats().then(function (fmts) {
+      var want = ['code_39', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'itf', 'codabar', 'code_93']
+        .filter(function (f) { return fmts.indexOf(f) !== -1; });
+      if (!want.length) { startLibrary(); return; }
+      var detector = new window.BarcodeDetector({ formats: want });
+      startNative(detector);
+    }).catch(function () { startLibrary(); });
+  } else {
+    startLibrary();
+  }
+}
+function startNative(detector) {
+  $('camNative').classList.remove('hidden'); $('camLib').classList.add('hidden');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+    .then(function (stream) {
+      if (!cam.on) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      cam.stream = stream;
+      var v = $('camVideo');
+      v.srcObject = stream;
+      return v.play().then(function () {
+        var busy = false;
+        cam.timer = setInterval(function () {
+          if (busy || !cam.on || v.readyState < 2) return;
+          busy = true;
+          detector.detect(v).then(function (codes) {
+            busy = false;
+            if (codes && codes.length && cam.on) gotCode(codes[0].rawValue);
+          }).catch(function () { busy = false; });
+        }, 200);
+      });
+    })
+    .catch(camFail);
+}
+function startLibrary() {
+  $('camNative').classList.add('hidden'); $('camLib').classList.remove('hidden');
+  loadLibrary(function (ok) {
+    if (!cam.on) return;
+    if (!ok || !window.Html5Qrcode) { camFail({ name: 'Other' }); return; }
+    var F = window.Html5QrcodeSupportedFormats || {};
+    var formats = ['CODE_39', 'CODE_128', 'EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'QR_CODE', 'ITF', 'CODABAR', 'CODE_93']
+      .map(function (k) { return F[k]; }).filter(function (v) { return v !== undefined; });
+    try {
+      cam.lib = new window.Html5Qrcode('camLib', formats.length ? { verbose: false, formatsToSupport: formats } : { verbose: false });
+    } catch (e) { camFail(e); return; }
+    cam.lib.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 140 } },
+      function (text) { if (cam.on) gotCode(text); }, function () {})
+      .catch(camFail);
+  });
+}
+var libState = 0, libWaiters = [];
+function loadLibrary(cb) {
+  if (window.Html5Qrcode) { cb(true); return; }
+  libWaiters.push(cb);
+  if (libState === 1) return;
+  libState = 1;
+  var s = document.createElement('script');
+  s.src = LIB_URL;
+  s.onload = function () { libState = 2; libWaiters.splice(0).forEach(function (f) { f(true); }); };
+  s.onerror = function () { libState = 0; libWaiters.splice(0).forEach(function (f) { f(false); }); };
+  document.head.appendChild(s);
+}
+function stopCamera() {
+  cam.on = false;
+  if (cam.timer) { clearInterval(cam.timer); cam.timer = null; }
+  if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
+  var v = $('camVideo'); if (v) { try { v.pause(); } catch (e) {} v.srcObject = null; }
+  if (cam.lib) {
+    var lib = cam.lib; cam.lib = null;
+    try { lib.stop().then(function () { try { lib.clear(); } catch (e) {} }).catch(function () {}); } catch (e) {}
+  }
+  $('camBox').classList.add('hidden');
+  $('camBtn').classList.remove('hidden');
+}
+function gotCode(raw) {
+  stopCamera();
+  try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
+  var id = lookup(raw);
+  if (id) { openItem(id, 'scan'); return; }
+  setMsg($('scanMsg'), 'That barcode (' + String(raw).slice(0, 30) + ') is not on the inventory list. Try scanning the item label, or type the item number.', 'err');
+}
+$('camBtn').onclick = startCamera;
+$('camStop').onclick = stopCamera;
 
 /* ---------- one item ---------- */
 function cleanNum(v) { return String(v).replace(/[^\d]/g, '').slice(0, 4); }
 
-function showItem() {
-  var id = state.ids[state.i], it = byId[id], n = state.ids.length;
-  $('stepText').textContent = 'Item ' + (state.i + 1) + ' of ' + n;
-  $('areaChip').textContent = state.area;
-  $('barFill').style.width = Math.round(state.i / n * 100) + '%';
-
+function openItem(id, from) {
+  stopCamera();
+  current = id; returnTo = from;
+  var it = byId[id];
   var pic = $('pic');
   pic.innerHTML = '';
   if (it.img) {
@@ -291,28 +508,24 @@ function showItem() {
   $('tipBox').classList.toggle('hidden', !it.tip);
 
   var prev = state.counts[id];
+  if (prev && from === 'scan') setMsg($('againMsg'), 'You already counted this item (' + prev.count + '). Saving will replace that number.', 'warn');
+  else hide($('againMsg'));
   $('count').value = prev ? String(prev.count) : '';
   $('damagedBox').classList.toggle('hidden', !it.durable);
   $('damaged').value = prev && it.durable ? String(prev.damaged) : (it.durable ? '0' : '');
   $('count').classList.remove('bad'); $('damaged').classList.remove('bad');
-  hideMsg();
-  $('nextBtn').textContent = state.i === n - 1 ? 'Check my counts' : 'Next';
+  hide($('itemMsg'));
   show('item');
   setTimeout(function () { $('count').focus(); }, 50);
 }
-
-function msg(text, kind) {
-  var m = $('itemMsg');
-  m.textContent = text; m.className = 'msg ' + kind;
-}
-function hideMsg() { $('itemMsg').className = 'msg hidden'; }
 
 function bump(inputId, d) {
   var el = $(inputId);
   var v = el.value === '' ? 0 : parseInt(el.value, 10);
   v = Math.max(0, Math.min(MAX, v + d));
   el.value = String(v);
-  el.classList.remove('bad'); hideMsg();
+  el.classList.remove('bad'); hide($('itemMsg'));
+  if (inputId === 'count') delete state.confirmedBig[current];
 }
 $('minus').onclick = function () { bump('count', -1); };
 $('plus').onclick = function () { bump('count', 1); };
@@ -322,87 +535,93 @@ $('dplus').onclick = function () { bump('damaged', 1); };
   $(k).addEventListener('input', function () {
     var c = cleanNum(this.value);
     if (c !== this.value) this.value = c;
-    this.classList.remove('bad'); hideMsg();
-    if (k === 'count') delete state.confirmedBig[state.ids[state.i]];
+    this.classList.remove('bad'); hide($('itemMsg'));
+    if (k === 'count') delete state.confirmedBig[current];
   });
-  $(k).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('nextBtn').click(); } });
+  $(k).addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('saveBtn').click(); } });
 });
 $('noneBtn').onclick = function () {
   $('count').value = '0'; $('damaged').value = '0';
-  $('count').classList.remove('bad'); hideMsg();
+  $('count').classList.remove('bad'); hide($('itemMsg'));
 };
 
-/** Returns true when this item's answers are complete and saved. */
+/** Returns the saved answer, or null if something needs fixing. */
 function commitItem() {
-  var id = state.ids[state.i], it = byId[id];
+  var id = current, it = byId[id], m = $('itemMsg');
   var cv = $('count').value.trim();
-  if (cv === '') { $('count').classList.add('bad'); msg('Type how many you counted. If there are none, tap "There are none here (0)".', 'err'); $('count').focus(); return false; }
-  if (!/^\d+$/.test(cv)) { $('count').classList.add('bad'); msg('Use whole numbers only, like 12.', 'err'); return false; }
+  if (cv === '') { $('count').classList.add('bad'); setMsg(m, 'Type how many you counted. If there are none, tap "There are none here (0)".', 'err'); $('count').focus(); return null; }
+  if (!/^\d+$/.test(cv)) { $('count').classList.add('bad'); setMsg(m, 'Use whole numbers only, like 12.', 'err'); return null; }
   var count = parseInt(cv, 10);
   var damaged = '';
   if (it.durable) {
     var dv = $('damaged').value.trim();
-    if (dv === '' || !/^\d+$/.test(dv)) { $('damaged').classList.add('bad'); msg('Type how many are damaged or broken. Type 0 if none.', 'err'); $('damaged').focus(); return false; }
+    if (dv === '' || !/^\d+$/.test(dv)) { $('damaged').classList.add('bad'); setMsg(m, 'Type how many are damaged or broken. Type 0 if none.', 'err'); $('damaged').focus(); return null; }
     damaged = parseInt(dv, 10);
-    if (damaged > count) { $('damaged').classList.add('bad'); msg('The damaged number can\'t be bigger than the total count (' + count + ').', 'err'); $('damaged').focus(); return false; }
+    if (damaged > count) { $('damaged').classList.add('bad'); setMsg(m, 'The damaged number can\'t be bigger than the total count (' + count + ').', 'err'); $('damaged').focus(); return null; }
   }
   if (count > BIG && !state.confirmedBig[id]) {
     state.confirmedBig[id] = true;
-    msg(count + ' is a lot! Count again to be sure. If ' + count + ' is right, tap the button again.', 'warn');
-    return false;
+    setMsg(m, count + ' is a lot! Count again to be sure. If ' + count + ' is right, tap Save count again.', 'warn');
+    return null;
   }
   state.counts[id] = { count: count, damaged: damaged };
+  if (state.order.indexOf(id) === -1) state.order.push(id);
   save();
-  return true;
+  return state.counts[id];
 }
 
-$('nextBtn').onclick = function () {
-  if (!commitItem()) return;
-  if (state.reviewReturn) { state.reviewReturn = false; state.i = state.ids.length; save(); showReview(); return; }
-  if (state.i < state.ids.length - 1) { state.i++; save(); showItem(); }
-  else { state.i = state.ids.length; save(); showReview(); }
+$('saveBtn').onclick = function () {
+  var c = commitItem();
+  if (!c) return;
+  var it = byId[current];
+  if (returnTo === 'review') showReview();
+  else showScan('Saved: ' + c.count + ' — ' + it.desc + '. Scan the next item.');
 };
 $('backBtn').onclick = function () {
-  if (state.i === 0) { show('start'); initStart(); return; }
-  state.reviewReturn = false;
-  state.i--; save(); showItem();
+  if (returnTo === 'review') showReview(); else showScan();
 };
 
 /* ---------- review ---------- */
 function showReview() {
   var body = $('reviewBody');
   body.innerHTML = '';
-  state.ids.forEach(function (id, idx) {
+  state.order.forEach(function (id) {
     var it = byId[id], c = state.counts[id];
     var tr = document.createElement('tr');
     var td1 = document.createElement('td');
     td1.innerHTML = '<b></b><div class="muted"></div>';
     td1.querySelector('b').textContent = it.desc;
-    td1.querySelector('div').textContent = unitInfo(it.unit).big + (it.durable && c ? ' · ' + c.damaged + ' damaged' : '');
+    td1.querySelector('div').textContent = unitInfo(it.unit).big + (it.durable ? ' · ' + c.damaged + ' damaged' : '');
     var td2 = document.createElement('td'); td2.className = 'num';
-    td2.textContent = c ? String(c.count) : '—';
+    td2.textContent = String(c.count);
     var td3 = document.createElement('td');
     var b = document.createElement('button'); b.type = 'button'; b.className = 'edit'; b.textContent = 'Fix';
-    b.onclick = function () { state.i = idx; state.reviewReturn = true; save(); showItem(); };
-    td3.appendChild(b);
+    b.onclick = function () { openItem(id, 'review'); };
+    var d = document.createElement('button'); d.type = 'button'; d.className = 'edit del'; d.textContent = 'Remove';
+    d.onclick = function () {
+      delete state.counts[id];
+      state.order = state.order.filter(function (x) { return x !== id; });
+      save(); showReview();
+    };
+    td3.appendChild(b); td3.appendChild(document.createElement('br')); td3.appendChild(d);
     tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
     body.appendChild(tr);
   });
-  var missing = state.ids.filter(function (id) { return !state.counts[id]; }).length;
-  $('sendBtn').disabled = missing > 0;
-  var sm = $('sendMsg');
-  if (missing) { sm.textContent = missing + ' item(s) still need a count. Tap Fix next to the item with a dash.'; sm.className = 'msg err'; }
-  else sm.className = 'msg hidden';
+  var none = state.order.length === 0;
+  $('sendBtn').disabled = none;
+  if (none) setMsg($('sendMsg'), 'There are no counts yet. Tap "Scan more items" to add some.', 'err');
+  else hide($('sendMsg'));
   show('review');
 }
+$('moreBtn').onclick = function () { showScan(); };
 
 $('sendBtn').onclick = function () {
   var btn = this;
   btn.disabled = true; btn.textContent = 'Sending…';
-  $('sendMsg').className = 'msg hidden';
+  hide($('sendMsg'));
   var payload = {
-    student: state.student, area: state.area,
-    counts: state.ids.map(function (id) { var c = state.counts[id]; return { id: id, count: c.count, damaged: c.damaged }; })
+    student: state.student, area: 'Scan',
+    counts: state.order.map(function (id) { var c = state.counts[id]; return { id: id, count: c.count, damaged: c.damaged }; })
   };
   fetch(API_URL, { method: 'POST', body: JSON.stringify(payload), credentials: 'omit', redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' } })
@@ -412,16 +631,14 @@ $('sendBtn').onclick = function () {
       var r = resp.result;
       clearSaved();
       $('doneTitle').textContent = 'Thank you, ' + state.student + '!';
-      $('doneText').textContent = 'Your ' + r.saved + ' count' + (r.saved === 1 ? '' : 's') + ' for ' + state.area + ' were sent to your teacher.';
+      $('doneText').textContent = 'Your ' + r.saved + ' count' + (r.saved === 1 ? '' : 's') + ' were sent to your teacher.';
       btn.disabled = false; btn.textContent = 'Send my counts';
       show('done');
     })
     .catch(function (e) {
       btn.disabled = false; btn.textContent = 'Send my counts';
-      var sm = $('sendMsg');
       var m = (e && e.message && e.message !== 'Failed to fetch') ? e.message : 'Could not reach the server. Check the Wi-Fi.';
-      sm.textContent = m + ' Your counts are still here — try sending again.';
-      sm.className = 'msg err';
+      setMsg($('sendMsg'), m + ' Your counts are still here — try sending again.', 'err');
     });
 };
 
@@ -430,7 +647,6 @@ $('againBtn').onclick = function () {
   state = null;
   show('start'); initStart();
   $('student').value = name;
-  $('area').value = '';
 };
 
 $('startBtn').disabled = true; $('startBtn').textContent = 'Loading…';
@@ -439,15 +655,13 @@ fetch(API_URL + '?api=data', { credentials: 'omit', redirect: 'follow' })
   .then(function (r) {
     if (!r.ok) throw new Error(r.error || 'Could not load.');
     DATA = r.data;
-    byId = {};
-    DATA.items.forEach(function (it) { byId[it.id] = it; });
+    buildIndex();
     $('startBtn').disabled = false; $('startBtn').textContent = 'Start counting';
     initStart();
   })
   .catch(function () {
     $('startBtn').textContent = 'Could not load';
-    var e = $('startErr'); e.textContent = 'The item list could not load. Check the Wi-Fi and refresh the page. If it keeps happening, tell your teacher.';
-    e.classList.remove('hidden');
+    setMsg($('startErr'), 'The item list could not load. Check the Wi-Fi and refresh the page. If it keeps happening, tell your teacher.', 'err');
   });
 </script>
 </body>
