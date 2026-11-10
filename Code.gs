@@ -30,10 +30,10 @@ const CAT = { track: 1, pic: 2, stock: 3, desc: 4, unit: 5, cost: 6, section: 7,
 const CAT_HEAD = ['Track?', 'Picture', 'Stock #', 'Description', 'Unit', 'Unit Cost', 'Section', 'Type', 'Image ID'];
 
 const INV = { pic: 1, id: 2, desc: 3, unit: 4, type: 5, mode: 6, loc: 7, onHand: 8, cond: 9,
-              replace: 10, counted: 11, cost: 12, source: 13, img: 14, label: 15, notes: 16, tip: 17 };
+              replace: 10, counted: 11, cost: 12, source: 13, img: 14, label: 15, notes: 16, tip: 17, barcode: 18 };
 const INV_HEAD = ['Picture', 'Item ID', 'Description', 'Unit', 'Type', 'Count Mode', 'Location',
                   'On Hand', 'Condition', '# To Replace', 'Last Counted', 'Unit Cost', 'Source',
-                  'Image ID', 'Label?', 'Notes', 'Count Tip (students see this)'];
+                  'Image ID', 'Label?', 'Notes', 'Count Tip (students see this)', 'Barcode (optional)'];
 
 const SCAN_HEAD = ['Scan here ▼', 'Qty', 'Item', 'Mode', 'Time', 'Status'];
 const PLAN_HEAD = ['Item ID', 'Description', 'Unit', 'Per Student', 'Students', 'Extra', 'Total Need', 'Notes'];
@@ -252,7 +252,10 @@ function onEdit(e) {
   const out = e.range.offset(0, 1, 1, 5);
   const inv = e.source.getSheetByName('Inventory');
   const vals = inv.getRange(2, 1, Math.max(inv.getLastRow() - 1, 1), INV_HEAD.length).getValues();
-  const hit = vals.find(v => String(v[INV.id - 1]).toUpperCase() === code);
+  const strip = c => /^\d+$/.test(c) ? c.replace(/^0+(?=\d)/, '') : c;
+  const hit = vals.find(v => String(v[INV.id - 1]).toUpperCase() === code) ||
+    vals.find(v => String(v[INV.barcode - 1] || '').toUpperCase().split(/[,\s]+/)
+      .some(b => b && strip(b) === strip(code)));
   if (!hit) {
     out.setValues([['', 'NOT IN INVENTORY', '', new Date(), 'Error']]).setBackground('#f4cccc');
     return;
@@ -521,6 +524,7 @@ function getCountData_() {
       area: String(v[INV.loc - 1] || '').trim() || NO_AREA,
       img: String(v[INV.img - 1] || '').trim(),
       tip: String(v[INV.tip - 1] || '').trim(),
+      barcode: String(v[INV.barcode - 1] || '').trim(),
     }))
     .sort((a, b) => a.area.localeCompare(b.area) || a.desc.localeCompare(b.desc));
   const areas = [...new Set(items.map(i => i.area))];
@@ -654,11 +658,18 @@ function showCountFormLink() {
 }
 
 function addTipHeader_(inv) {
-  const cell = inv.getRange(1, INV.tip);
-  if (cell.getValue() === '') {
-    cell.setValue(INV_HEAD[INV.tip - 1]).setFontWeight('bold').setBackground('#d9ead3')
-      .setNote('Optional. A short counting tip students see, e.g. "Count the boxes, not the pens inside."');
-  }
+  const notes = {
+    [INV.tip]: 'Optional. A short counting tip students see, e.g. "Count the boxes, not the pens inside."',
+    [INV.barcode]: 'Optional. The barcode printed on the product (UPC). Students can then scan the product itself, ' +
+      'not just your label. Separate more than one with commas.',
+  };
+  [INV.tip, INV.barcode].forEach(col => {
+    const cell = inv.getRange(1, col);
+    if (cell.getValue() === '') {
+      cell.setValue(INV_HEAD[col - 1]).setFontWeight('bold').setBackground('#d9ead3').setNote(notes[col]);
+    }
+  });
+  inv.getRange(2, INV.barcode, Math.max(inv.getMaxRows() - 1, 1), 1).setNumberFormat('@');
 }
 
 // ───────────────────────────── Helpers ─────────────────────────────
