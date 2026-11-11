@@ -11,6 +11,10 @@
  *   Order List   – generated shortfall list (need − usable on hand)
  *   Count Log    – counts sent in by students from the Count Form web page
  *
+ * Web pages (GitHub Pages, talking to this script's web app):
+ *   index.html   – Student Count Form (scan or type an item, count it)
+ *   add.html     – Teacher Add Item page (scan/type/assign a number, photo, details). Needs the Add-Item PIN.
+ *
  * Setup: Extensions ▸ Apps Script ▸ paste this file ▸ Save ▸ reload the sheet ▸
  *        Inventory menu ▸ "1. Set up / import catalog".
  * Student Count Form: add an HTML file named "Count" (paste Count.html), then
@@ -60,6 +64,9 @@ function onOpen() {
     .addItem('Review student counts', 'reviewStudentCounts')
     .addItem('Apply student counts → Inventory', 'applyStudentCounts')
     .addItem('Show Count Form link', 'showCountFormLink')
+    .addSeparator()
+    .addItem('Show Add Item page link', 'showAddItemLink')
+    .addItem('Set Add Item PIN', 'setAddItemPin')
     .addSeparator()
     .addItem('Build barcode labels', 'buildLabels')
     .addSeparator()
@@ -496,10 +503,14 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-/** Receives counts from the student page on COUNT_SITE_URL. */
+/** Receives counts from the student page, and add-item requests from the teacher page. */
 function doPost(e) {
   try {
-    return json_({ ok: true, result: submitCounts(JSON.parse(e.postData.contents)) });
+    const d = JSON.parse(e.postData.contents);
+    if (d && d.action === 'checkPin') { checkPin_(d.pin); return json_({ ok: true, result: addPageInfo_() }); }
+    if (d && d.action === 'lookup') { checkPin_(d.pin); return json_({ ok: true, result: lookupCode_(d.code) }); }
+    if (d && d.action === 'addItem') { checkPin_(d.pin); return json_({ ok: true, result: addOrUpdateItem_(d) }); }
+    return json_({ ok: true, result: submitCounts(d) });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message ? err.message : err) });
   }
@@ -670,6 +681,263 @@ function addTipHeader_(inv) {
     }
   });
   inv.getRange(2, INV.barcode, Math.max(inv.getMaxRows() - 1, 1), 1).setNumberFormat('@');
+}
+
+// ───────────────────────────── Teacher Add Item page (web app API) ─────────────────────────────
+// add.html on GitHub Pages calls doPost with action checkPin / lookup / addItem.
+// Every call needs the Add-Item PIN (Inventory ▸ Set Add Item PIN), so students can't change the list.
+
+const ADD_SITE_URL = COUNT_SITE_URL ? COUNT_SITE_URL + 'add.html' : '';
+const PHOTO_FOLDER_NAME = 'Classroom Inventory Photos';
+const UNIT_RE = /^[A-Za-z0-9][A-Za-z0-9 \/.\-]{0,24}$/;
+
+/** Run once from the Apps Script editor to approve Google Drive access (for item photos). */
+function authorizeAddItem() {
+  const f = photoFolder_();
+  Logger.log('Ready. Item photos will be saved in the Drive folder "' + f.getName() + '": ' + f.getUrl());
+}
+
+function setAddItemPin() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Set Add Item PIN',
+    'Type a PIN of 4–8 digits. You enter it once on each device that uses the Add Item page.\n' +
+    'Changing it signs out every device.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const pin = r.getResponseText().trim();
+  if (!/^\d{4,8}$/.test(pin)) return ui.alert('The PIN must be 4 to 8 digits. Nothing was changed.');
+  PropertiesService.getScriptProperties().setProperty('ADD_PIN', pin);
+  toast_('Add Item PIN saved.');
+}
+
+function showAddItemLink() {
+  const ui = SpreadsheetApp.getUi();
+  const hasPin = !!PropertiesService.getScriptProperties().getProperty('ADD_PIN');
+  const html = HtmlService.createHtmlOutput(
+    '<div style="font-family:Arial;font-size:14px">Add Item page (for you, not students):<br><br>' +
+    '<input style="width:100%;font-size:13px;padding:6px" readonly onclick="this.select()" value="' +
+    ADD_SITE_URL.replace(/"/g, '&quot;') + '"><br><br>' +
+    (hasPin ? 'You will be asked for your Add Item PIN the first time on each device.'
+            : '<b style="color:#b42318">Set a PIN first: Inventory ▸ Set Add Item PIN.</b>') + '</div>')
+    .setWidth(520).setHeight(180);
+  ui.showModalDialog(html, 'Add Item page');
+}
+
+function checkPin_(pin) {
+  const want = PropertiesService.getScriptProperties().getProperty('ADD_PIN');
+  if (!want) throw new Error('No Add Item PIN has been set yet. In the Sheet choose Inventory ▸ Set Add Item PIN.');
+  if (String(pin || '').trim() !== want) {
+    Utilities.sleep(800); // slows down guessing
+    throw new Error('That PIN is not right.');
+  }
+}
+
+function normCode_(raw) {
+  let c = String(raw == null ? '' : raw).trim().replace(/^\*+|\*+$/g, '').replace(/\s+/g, '').toUpperCase();
+  if (/^\d{4}$/.test(c)) c = c.padStart(5, '0');
+  return c;
+}
+function stripZeros_(c) { return /^\d+$/.test(c) ? c.replace(/^0+(?=\d)/, '') : c; }
+
+function invItemFromRow_(v, row) {
+  return {
+    row, id: String(v[INV.id - 1]), desc: String(v[INV.desc - 1]), unit: String(v[INV.unit - 1] || ''),
+    type: String(v[INV.type - 1] || 'Consumable'), loc: String(v[INV.loc - 1] || ''),
+    onHand: v[INV.onHand - 1] === '' ? '' : v[INV.onHand - 1], cond: String(v[INV.cond - 1] || ''),
+    cost: v[INV.cost - 1] === '' ? '' : v[INV.cost - 1], source: String(v[INV.source - 1] || ''),
+    img: String(v[INV.img - 1] || ''), tip: String(v[INV.tip - 1] || ''), barcode: String(v[INV.barcode - 1] || ''),
+    notes: String(v[INV.notes - 1] || ''),
+  };
+}
+
+/** Finds a code in Inventory (item # or barcode), then the district Catalog, then a public UPC database. */
+function lookupCode_(raw) {
+  const code = normCode_(raw);
+  if (!code) throw new Error('Scan or type a number first.');
+  const ss = SpreadsheetApp.getActive();
+  const out = { code, inventory: null, catalog: null, product: null, nextId: nextItemId_() };
+
+  const inv = ss.getSheetByName('Inventory');
+  if (inv && inv.getLastRow() > 1) {
+    const width = Math.max(INV_HEAD.length, inv.getLastColumn());
+    const vals = inv.getRange(2, 1, inv.getLastRow() - 1, width).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      const v = vals[i];
+      const id = String(v[INV.id - 1]).trim().toUpperCase();
+      const codes = String(v[INV.barcode - 1] || '').toUpperCase().split(/[,\s]+/).filter(Boolean);
+      if (id === code || codes.some(b => stripZeros_(b) === stripZeros_(code))) {
+        out.inventory = invItemFromRow_(v, i + 2);
+        break;
+      }
+    }
+  }
+  const cat = ss.getSheetByName('Catalog');
+  if (!out.inventory && cat && cat.getLastRow() > 1 && /^\d{5}$/.test(code)) {
+    const vals = cat.getRange(2, 1, cat.getLastRow() - 1, CAT_HEAD.length).getValues();
+    const v = vals.find(r => String(r[CAT.stock - 1]) === code);
+    if (v) out.catalog = { stock: code, desc: String(v[CAT.desc - 1]), unit: String(v[CAT.unit - 1]),
+      cost: v[CAT.cost - 1], img: String(v[CAT.img - 1] || ''), type: String(v[CAT.type - 1] || 'Consumable') };
+  }
+  if (!out.inventory && !out.catalog && /^\d{8,14}$/.test(code)) out.product = upcLookup_(code);
+  return out;
+}
+
+/** Best-effort product name from a free UPC database. Returns null when unknown or unreachable. */
+function upcLookup_(code) {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('upc:' + code);
+  if (hit) return hit === 'none' ? null : JSON.parse(hit);
+  let product = null;
+  try {
+    const res = UrlFetchApp.fetch('https://api.upcitemdb.com/prod/trial/lookup?upc=' + encodeURIComponent(code),
+      { muteHttpExceptions: true, headers: { Accept: 'application/json' } });
+    if (res.getResponseCode() === 200) {
+      const j = JSON.parse(res.getContentText());
+      const it = j && j.items && j.items[0];
+      if (it && it.title) product = { title: String(it.title).slice(0, 120), brand: String(it.brand || '').slice(0, 60) };
+    }
+  } catch (err) { product = null; }
+  cache.put('upc:' + code, product ? JSON.stringify(product) : 'none', 21600);
+  return product;
+}
+
+/** What the Add Item page needs on load: the next free number and the locations already in use. */
+function addPageInfo_() {
+  const inv = SpreadsheetApp.getActive().getSheetByName('Inventory');
+  const locs = inv ? [...new Set(colValues_(inv, INV.loc).map(x => String(x).trim()).filter(Boolean))].sort() : [];
+  return { nextId: nextItemId_(), locations: locs.slice(0, 100) };
+}
+
+/** Next free "E-0001" style number for items you number yourself. */
+function nextItemId_() {
+  const inv = SpreadsheetApp.getActive().getSheetByName('Inventory');
+  const ids = inv ? colValues_(inv, INV.id).map(String).filter(s => /^E-\d+$/.test(s)).map(s => +s.slice(2)) : [];
+  return 'E-' + String((ids.length ? Math.max(...ids) : 0) + 1).padStart(4, '0');
+}
+
+function photoFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('PHOTO_FOLDER_ID');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (err) { /* folder deleted: make a new one */ } }
+  const f = DriveApp.createFolder(PHOTO_FOLDER_NAME);
+  props.setProperty('PHOTO_FOLDER_ID', f.getId());
+  return f;
+}
+
+/** Saves a photo to Drive, viewable by link so the Sheet and the student form can show it. */
+function savePhoto_(photo, name) {
+  if (!photo || !photo.data) return '';
+  const type = /^image\/(jpeg|png|webp)$/.test(photo.type) ? photo.type : 'image/jpeg';
+  const bytes = Utilities.base64Decode(photo.data);
+  if (bytes.length > 4 * 1024 * 1024) throw new Error('That photo is too large. Try again.');
+  const file = photoFolder_().createFile(Utilities.newBlob(bytes, type, name.replace(/[\\/:*?"<>|]/g, '-') + '.jpg'));
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return file.getId();
+}
+
+/** Adds a new Inventory item, or updates the one in d.updateRow. */
+function addOrUpdateItem_(d) {
+  const clean = (x, n) => String(x == null ? '' : x).replace(/\s+/g, ' ').trim().slice(0, n || 200);
+  const safe = v => (typeof v === 'string' && /^[=+\-@]/.test(v)) ? "'" + v : v;
+  const it = d.item || {};
+  const desc = clean(it.desc, 120);
+  if (!desc) throw new Error('Type a name for the item.');
+  const type = it.type === 'Durable' ? 'Durable' : it.type === 'Consumable' ? 'Consumable' : '';
+  if (!type) throw new Error('Choose Consumable or Durable.');
+  const unit = clean(it.unit, 20) || 'Each';
+  if (!UNIT_RE.test(unit)) throw new Error('The unit should look like "Each", "Box" or "Box/100" (letters, numbers and / only).');
+  const cond = type === 'Durable' ? clean(it.cond, 20) : '';
+  if (type === 'Durable' && CONDITIONS.indexOf(cond) === -1) throw new Error('Choose a condition for this durable item.');
+  let onHand = '';
+  if (it.onHand !== '' && it.onHand != null) {
+    onHand = Number(it.onHand);
+    if (!Number.isInteger(onHand) || onHand < 0 || onHand > MAX_COUNT) throw new Error('How many on hand must be a whole number from 0 to ' + MAX_COUNT + '.');
+  }
+  let cost = '';
+  if (it.cost !== '' && it.cost != null) {
+    cost = Number(String(it.cost).replace(/[$,]/g, ''));
+    if (!isFinite(cost) || cost < 0 || cost > 100000) throw new Error('Check the cost.');
+  }
+  const barcodes = [...new Set(String(it.barcode || '').split(/[,\s]+/).map(normCode_).filter(Boolean))];
+  if (barcodes.some(b => !/^[A-Z0-9\-.]{3,30}$/.test(b))) throw new Error('A barcode can only have letters, numbers, dashes or dots.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ss = SpreadsheetApp.getActive();
+    const inv = ensureSheet_(ss, 'Inventory', INV_HEAD);
+    addTipHeader_(inv);
+    const width = Math.max(INV_HEAD.length, inv.getLastColumn());
+    const vals = inv.getLastRow() > 1 ? inv.getRange(2, 1, inv.getLastRow() - 1, width).getValues() : [];
+    const updateRow = Number(d.updateRow) || 0;
+    if (updateRow && (updateRow < 2 || updateRow > vals.length + 1)) throw new Error('That item moved in the Sheet. Look it up again.');
+
+    // which item number to use
+    let id;
+    if (updateRow) {
+      id = String(vals[updateRow - 2][INV.id - 1]);
+      if (d.updateId && String(d.updateId) !== id) throw new Error('That item moved in the Sheet. Look it up again.');
+    } else {
+      id = normCode_(it.id) || nextItemId_();
+      if (!/^[A-Z0-9][A-Z0-9\-.]{1,19}$/.test(id)) throw new Error('The item number can only have letters, numbers, dashes or dots.');
+    }
+    // no duplicates: item number or barcode already used by another row
+    vals.forEach((v, i) => {
+      if (i + 2 === updateRow) return;
+      const otherId = String(v[INV.id - 1]).trim().toUpperCase();
+      const other = String(v[INV.barcode - 1] || '').toUpperCase().split(/[,\s]+/).filter(Boolean);
+      if (!updateRow && otherId === id) throw new Error('Item number ' + id + ' is already used by "' + v[INV.desc - 1] + '".');
+      barcodes.forEach(b => {
+        if (otherId === b || other.some(o => stripZeros_(o) === stripZeros_(b))) {
+          throw new Error('Barcode ' + b + ' already belongs to "' + v[INV.desc - 1] + '".');
+        }
+      });
+    });
+
+    const photoId = d.photo ? savePhoto_(d.photo, id + ' ' + desc) : '';
+    const today = new Date();
+
+    if (updateRow) {
+      const v = vals[updateRow - 2].slice(0, INV_HEAD.length);
+      while (v.length < INV_HEAD.length) v.push('');
+      v[INV.desc - 1] = safe(desc); v[INV.unit - 1] = unit; v[INV.type - 1] = type;
+      v[INV.loc - 1] = safe(clean(it.loc, 40)); v[INV.cond - 1] = cond;
+      if (onHand !== '') { v[INV.onHand - 1] = onHand; v[INV.counted - 1] = today; }
+      if (cost !== '') v[INV.cost - 1] = cost;
+      v[INV.tip - 1] = safe(clean(it.tip, 120));
+      v[INV.barcode - 1] = barcodes.join(', ');
+      if (photoId) v[INV.img - 1] = photoId;
+      v[INV.pic - 1] = ''; // formula is restored below
+      inv.getRange(updateRow, 1, 1, INV_HEAD.length).setValues([v]);
+      formatInventory_(inv);
+      return { id, desc, updated: true, nextId: nextItemId_() };
+    }
+
+    const row = invRow_({
+      id, desc: safe(desc), unit, type, cost,
+      source: it.fromCatalog ? 'District warehouse' : 'Other',
+      img: photoId || clean(it.catalogImg, 80),
+    });
+    row[INV.loc - 1] = safe(clean(it.loc, 40));
+    row[INV.cond - 1] = cond;
+    if (onHand !== '') { row[INV.onHand - 1] = onHand; row[INV.counted - 1] = today; }
+    row[INV.tip - 1] = safe(clean(it.tip, 120));
+    row[INV.barcode - 1] = barcodes.join(', ');
+    row[INV.notes - 1] = 'Added ' + Utilities.formatDate(today, ss.getSpreadsheetTimeZone(), 'M/d/yyyy') + ' on the Add Item page';
+    appendInventory_(inv, [row]);
+
+    // keep the Catalog's Track? box in step for district items
+    if (it.fromCatalog) {
+      const cat = ss.getSheetByName('Catalog');
+      if (cat && cat.getLastRow() > 1) {
+        const stocks = cat.getRange(2, CAT.stock, cat.getLastRow() - 1, 1).getValues();
+        const i = stocks.findIndex(r => String(r[0]) === id);
+        if (i >= 0) cat.getRange(i + 2, CAT.track).setValue(true);
+      }
+    }
+    return { id, desc, updated: false, nextId: nextItemId_() };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ───────────────────────────── Helpers ─────────────────────────────
