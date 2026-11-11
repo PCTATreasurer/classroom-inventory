@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Add Item – Classroom Inventory</title>
+<style>
+  :root {
+    --ink: #1d2733; --muted: #5b6776; --line: #d5dbe3; --bg: #f3f5f8; --card: #fff;
+    --blue: #1a56db; --blue-dark: #1442a8; --blue-bg: #eef3ff; --green: #127a3d; --green-bg: #e7f6ec;
+    --red: #b42318; --red-bg: #fdecea; --yellow-bg: #fff6d6; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", Roboto, Arial, sans-serif; font-size: 18px; line-height: 1.4; }
+  .wrap { max-width: 600px; margin: 0 auto; padding: 16px 14px 48px; }
+  h1 { font-size: 26px; margin: 4px 0; }
+  h2 { font-size: 21px; margin: 0 0 8px; }
+  p { margin: 6px 0; }
+  .muted { color: var(--muted); font-size: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-top: 14px; }
+  label.field { display: block; font-weight: 700; margin: 18px 0 6px; }
+  label.field .opt { font-weight: 400; color: var(--muted); font-size: 15px; }
+  input[type=text], input[type=password], select {
+    width: 100%; font-size: 19px; padding: 11px 12px; border: 2px solid var(--line); border-radius: 10px;
+    background: #fff; color: var(--ink); }
+  input[readonly] { background: #f3f5f8; color: var(--muted); }
+  input:focus, select:focus, button:focus-visible { outline: 3px solid #93b4f5; outline-offset: 1px; border-color: var(--blue); }
+  input.bad { border-color: var(--red); background: var(--red-bg); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 54px; padding: 0 20px; font-size: 19px; font-weight: 700; border-radius: 12px;
+    border: 2px solid var(--blue); background: var(--blue); color: #fff; cursor: pointer; }
+  .btn:hover { background: var(--blue-dark); }
+  .btn.secondary { background: #fff; color: var(--blue); }
+  .btn.big { min-height: 70px; font-size: 21px; }
+  .btn.small { min-height: 44px; font-size: 16px; padding: 0 14px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.wide { width: 100%; }
+  .row { display: flex; gap: 10px; margin-top: 16px; }
+  .row .btn { flex: 1; }
+  .inline { display: flex; gap: 10px; align-items: stretch; }
+  .inline input, .inline select { flex: 1; min-width: 0; }
+  .hidden { display: none !important; }
+  .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 15px; margin: 18px 0 6px; }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-weight: 600; font-size: 17px; }
+  .msg.err { background: var(--red-bg); color: var(--red); border: 1px solid #f4b4ad; }
+  .msg.warn { background: var(--yellow-bg); color: #7a5a00; border: 1px solid #f0d98a; }
+  .msg.ok { background: var(--green-bg); color: var(--green); border: 1px solid #a7dcb8; }
+  .msg.info { background: var(--blue-bg); color: var(--blue-dark); border: 1px solid #c9d8fb; }
+
+  /* choice buttons */
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .choices.four { grid-template-columns: 1fr 1fr; }
+  .choice { min-height: 58px; border: 2px solid var(--line); border-radius: 12px; background: #fff; font-size: 18px;
+    font-weight: 700; color: var(--ink); cursor: pointer; padding: 6px 10px; }
+  .choice small { display: block; font-weight: 400; font-size: 13px; color: var(--muted); }
+  .choice[aria-pressed="true"] { border-color: var(--blue); background: var(--blue-bg); color: var(--blue-dark); box-shadow: inset 0 0 0 1px var(--blue); }
+  .choices.bad .choice { border-color: var(--red); }
+
+  /* photo */
+  .photo { width: 100%; height: 230px; background: #f7f8fa; border: 1px dashed #b9c2ce; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .photo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .nopic { color: var(--muted); font-size: 16px; text-align: center; padding: 10px; }
+  .nopic b { display: block; font-size: 44px; line-height: 1; margin-bottom: 6px; }
+
+  /* stepper */
+  .stepper { display: flex; align-items: stretch; gap: 10px; }
+  .stepper button { width: 60px; min-height: 58px; font-size: 30px; font-weight: 700; border-radius: 12px;
+    border: 2px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  .stepper input { flex: 1; min-width: 0; text-align: center; font-size: 28px; font-weight: 800; }
+
+  /* camera overlay */
+  .overlay { position: fixed; inset: 0; background: rgba(10,14,20,.92); z-index: 50; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+  .overlay .cam { width: 100%; max-width: 560px; border-radius: 12px; overflow: hidden; background: #000; position: relative; }
+  .overlay video { width: 100%; display: block; max-height: 60vh; object-fit: cover; }
+  .overlay .aim { position: absolute; left: 10%; right: 10%; top: 32%; bottom: 32%; border: 3px solid #4ade80;
+    border-radius: 10px; pointer-events: none; }
+  #camLib { width: 100%; max-width: 560px; background: #000; }
+  .overlay p { color: #e5e7eb; text-align: center; font-size: 17px; }
+  .overlay .btn { min-width: 220px; }
+
+  .done-big { font-size: 64px; text-align: center; line-height: 1; margin: 6px 0; color: var(--green); }
+  .center { text-align: center; }
+  .kv { font-size: 15px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 0. PIN -->
+  <section id="pinScreen">
+    <h1>Add Item</h1>
+    <p class="muted">For your teacher account only. Enter your Add Item PIN to continue.</p>
+    <div class="card">
+      <label class="field" for="pin">PIN</label>
+      <input type="password" id="pin" inputmode="numeric" autocomplete="off" maxlength="8">
+      <div id="pinMsg" class="msg hidden" role="alert"></div>
+      <div class="row"><button class="btn wide" id="pinBtn" type="button">Unlock</button></div>
+      <p class="muted" style="margin-top:12px">Set or change the PIN in the Sheet: Inventory ▸ Set Add Item PIN. This device will remember it.</p>
+    </div>
+  </section>
+
+  <!-- 1. FIND -->
+  <section id="findScreen" class="hidden">
+    <h1>Add or update an item</h1>
+    <div id="savedMsg" class="msg ok hidden" role="status"></div>
+    <div class="card">
+      <h2>1. Identify the item</h2>
+      <button class="btn big wide" id="scanFindBtn" type="button">📷 Scan its barcode</button>
+      <div class="or">or type a number</div>
+      <div class="inline">
+        <input type="text" id="code" autocomplete="off" placeholder="Stock #, UPC or item #" aria-label="Number to look up">
+        <button class="btn" id="lookBtn" type="button">Look up</button>
+      </div>
+      <div id="findMsg" class="msg hidden" role="alert"></div>
+      <div class="or">no barcode at all?</div>
+      <button class="btn secondary wide" id="newNumBtn" type="button">Give it a new number</button>
+    </div>
+    <p class="center" style="margin-top:18px"><button class="btn secondary small" id="lockBtn" type="button">Lock this device</button></p>
+  </section>
+
+  <!-- 2. DETAILS -->
+  <section id="formScreen" class="hidden">
+    <h1 id="formTitle">New item</h1>
+    <div id="formStatus" class="msg info"></div>
+    <div class="card">
+      <h2>2. Picture</h2>
+      <div class="photo" id="photoBox"></div>
+      <input type="file" id="photoInput" accept="image/*" capture="environment" class="hidden">
+      <div class="row">
+        <button class="btn" id="photoBtn" type="button">📷 Take photo</button>
+        <button class="btn secondary hidden" id="photoClear" type="button">Undo photo</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3. Details</h2>
+
+      <label class="field" for="desc">Name</label>
+      <input type="text" id="desc" maxlength="120" autocomplete="off" placeholder="Example: Digital calipers, 6 in">
+
+      <label class="field">Type</label>
+      <div class="choices" id="typeChoices">
+        <button type="button" class="choice" data-v="Consumable" aria-pressed="false">Consumable<small>gets used up</small></button>
+        <button type="button" class="choice" data-v="Durable" aria-pressed="false">Durable<small>reused, can break</small></button>
+      </div>
+
+      <div id="condBox" class="hidden">
+        <label class="field">Condition right now</label>
+        <div class="choices four" id="condChoices">
+          <button type="button" class="choice" data-v="Good" aria-pressed="false">Good</button>
+          <button type="button" class="choice" data-v="Fair" aria-pressed="false">Fair</button>
+          <button type="button" class="choice" data-v="Needs repair" aria-pressed="false">Needs repair</button>
+          <button type="button" class="choice" data-v="Replace" aria-pressed="false">Replace</button>
+        </div>
+      </div>
+
+      <label class="field" for="onHand">How many do you have now? <span class="opt">(optional)</span></label>
+      <div class="stepper">
+        <button type="button" id="ohMinus" aria-label="Subtract 1">−</button>
+        <input type="text" id="onHand" inputmode="numeric" maxlength="4" autocomplete="off" aria-label="How many on hand">
+        <button type="button" id="ohPlus" aria-label="Add 1">+</button>
+      </div>
+
+      <label class="field" for="unitName">Counted by</label>
+      <div class="inline">
+        <select id="unitName" aria-label="Unit">
+          <option>Each</option><option>Box</option><option>Pack</option><option>Set</option><option>Roll</option>
+          <option>Ream</option><option>Bag</option><option>Bottle</option><option>Case</option><option>Kit</option>
+          <option>Pair</option><option value="__other">Other…</option>
+        </select>
+        <input type="text" id="unitPer" inputmode="numeric" maxlength="5" placeholder="# in one" aria-label="How many in one" style="max-width:120px">
+      </div>
+      <input type="text" id="unitOther" class="hidden" maxlength="20" placeholder="Type the unit, e.g. Spool" style="margin-top:8px" aria-label="Other unit">
+      <p class="muted" id="unitPreview"></p>
+
+      <label class="field" for="loc">Where it's kept <span class="opt">(optional)</span></label>
+      <input type="text" id="loc" list="locList" maxlength="40" autocomplete="off" placeholder="Example: Cabinet A">
+      <datalist id="locList"></datalist>
+
+      <label class="field" for="itemId">Item number</label>
+      <input type="text" id="itemId" maxlength="20" autocomplete="off">
+      <p class="muted" id="idHelp"></p>
+
+      <label class="field" for="barcode">Barcode / UPC on the product <span class="opt">(optional)</span></label>
+      <div class="inline">
+        <input type="text" id="barcode" maxlength="120" autocomplete="off" placeholder="Scan or type">
+        <button class="btn secondary small" id="scanBarBtn" type="button">📷 Scan</button>
+      </div>
+
+      <label class="field" for="tip">Counting tip for students <span class="opt">(optional)</span></label>
+      <input type="text" id="tip" maxlength="120" autocomplete="off" placeholder="Example: Count the boxes, not the pens inside">
+
+      <label class="field" for="cost">Cost each <span class="opt">(optional)</span></label>
+      <input type="text" id="cost" inputmode="decimal" maxlength="10" autocomplete="off" placeholder="$0.00">
+
+      <div id="formMsg" class="msg hidden" role="alert"></div>
+      <div class="row">
+        <button class="btn secondary" id="cancelBtn" type="button">Cancel</button>
+        <button class="btn" id="saveBtn" type="button">Save item</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. SAVED -->
+  <section id="doneScreen" class="hidden">
+    <div class="card center">
+      <div class="done-big">✓</div>
+      <h2 id="doneTitle"></h2>
+      <p id="doneText" class="muted"></p>
+      <div class="row"><button class="btn wide" id="againBtn" type="button">Add another item</button></div>
+    </div>
+  </section>
+</div>
+
+<!-- camera overlay -->
+<div class="overlay hidden" id="camOverlay" role="dialog" aria-label="Barcode scanner">
+  <div class="cam" id="camNative"><video id="camVideo" playsinline muted></video><div class="aim"></div></div>
+  <div id="camLib" class="hidden"></div>
+  <p id="camHelp">Hold the barcode inside the green box.</p>
+  <button class="btn secondary" id="camStop" type="button">Stop camera</button>
+</div>
+
+<script>
+var API_URL = 'https://script.google.com/macros/s/AKfycbwvOqTKtE13zNp95nrm_B5EymvZHKUiGWrYL_-h6EdAcQL0rARS6OevX1_QE_ntdGK-/exec';
+var LIB_URL = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+var PIN_KEY = 'addItemPin';
+var CONDITIONS = ['Good', 'Fair', 'Needs repair', 'Replace'];
+
+var $ = function (id) { return document.getElementById(id); };
+var pin = '';
+var info = { nextId: '', locations: [] };
+var ctx = null;   // { mode: 'new'|'update', updateRow, updateId, fromCatalog, catalogImg, existingImg }
+var photo = null; // { data (base64), type, url }
+var type = '', cond = '';
+
+function setMsg(el, text, kind) { el.textContent = text; el.className = 'msg ' + kind; }
+function hide(el) { el.className = 'msg hidden'; }
+function show(id) {
+  ['pinScreen', 'findScreen', 'formScreen', 'doneScreen'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); });
+  window.scrollTo(0, 0);
+}
+function api(body) {
+  body.pin = pin;
+  return fetch(API_URL, { method: 'POST', body: JSON.stringify(body), credentials: 'omit', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' } })
+    .then(function (r) { return r.json(); })
+    .then(function (r) { if (!r.ok) throw new Error(r.error || 'Something went wrong.'); return r.result; })
+    .catch(function (e) {
+      if (e && e.message && e.message !== 'Failed to fetch' && e.name !== 'SyntaxError') throw e;
+      throw new Error('Could not reach the inventory. Check the Wi-Fi and try again.');
+    });
+}
+function norm(raw) {
+  var c = String(raw || '').trim().replace(/^\*+|\*+$/g, '').replace(/\s+/g, '').toUpperCase();
+  if (/^\d{4}$/.test(c)) c = '0' + c;
+  return c;
+}
+function thumb(id) { return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w600'; }
+
+/* ---------- PIN ---------- */
+function unlock(p, quiet) {
+  pin = p;
+  $('pinBtn').disabled = true; $('pinBtn').textContent = 'Checking…';
+  api({ action: 'checkPin' }).then(function (r) {
+    info = r;
+    try { localStorage.setItem(PIN_KEY, p); } catch (e) {}
+    $('pinBtn').disabled = false; $('pinBtn').textContent = 'Unlock';
+    showFind();
+  }).catch(function (e) {
+    $('pinBtn').disabled = false; $('pinBtn').textContent = 'Unlock';
+    if (/PIN is not right/.test(e.message)) { try { localStorage.removeItem(PIN_KEY); } catch (x) {} }
+    show('pinScreen');
+    if (!quiet || !/PIN is not right/.test(e.message)) setMsg($('pinMsg'), e.message, 'err');
+  });
+}
+$('pinBtn').onclick = function () {
+  var p = $('pin').value.trim();
+  if (!/^\d{4,8}$/.test(p)) { setMsg($('pinMsg'), 'The PIN is 4 to 8 digits.', 'err'); return; }
+  hide($('pinMsg'));
+  unlock(p, false);
+};
+$('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('pinBtn').click(); });
+$('lockBtn').onclick = function () {
+  try { localStorage.removeItem(PIN_KEY); } catch (e) {}
+  pin = ''; $('pin').value = ''; hide($('pinMsg')); show('pinScreen');
+};
+
+/* ---------- FIND ---------- */
+function showFind(savedText) {
+  if (savedText) setMsg($('savedMsg'), savedText, 'ok'); else hide($('savedMsg'));
+  hide($('findMsg'));
+  $('code').value = '';
+  $('newNumBtn').textContent = 'Give it a new number' + (info.nextId ? ' (' + info.nextId + ')' : '');
+  var dl = $('locList'); dl.innerHTML = '';
+  (info.locations || []).forEach(function (l) { var o = document.createElement('option'); o.value = l; dl.appendChild(o); });
+  show('findScreen');
+}
+function doLookup(raw) {
+  var code = norm(raw);
+  if (!code) { setMsg($('findMsg'), 'Scan a barcode or type a number first.', 'err'); return; }
+  setMsg($('findMsg'), 'Looking up ' + code + '…', 'info');
+  $('lookBtn').disabled = true;
+  api({ action: 'lookup', code: code }).then(function (r) {
+    $('lookBtn').disabled = false;
+    if (r.nextId) info.nextId = r.nextId;
+    openForm(r);
+  }).catch(function (e) {
+    $('lookBtn').disabled = false;
+    setMsg($('findMsg'), e.message, 'err');
+  });
+}
+$('lookBtn').onclick = function () { doLookup($('code').value); };
+$('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doLookup($('code').value); } });
+$('scanFindBtn').onclick = function () { startCamera(function (code) { $('code').value = code; doLookup(code); }); };
+$('newNumBtn').onclick = function () { openForm({ code: '', nextId: info.nextId }); };
+
+/* ---------- FORM ---------- */
+function setChoice(groupId, value) {
+  [].forEach.call($(groupId).querySelectorAll('.choice'), function (b) { b.setAttribute('aria-pressed', b.dataset.v === value ? 'true' : 'false'); });
+  $(groupId).classList.remove('bad');
+}
+[].forEach.call($('typeChoices').querySelectorAll('.choice'), function (b) {
+  b.onclick = function () { type = b.dataset.v; setChoice('typeChoices', type); $('condBox').classList.toggle('hidden', type !== 'Durable'); hide($('formMsg')); };
+});
+[].forEach.call($('condChoices').querySelectorAll('.choice'), function (b) {
+  b.onclick = function () { cond = b.dataset.v; setChoice('condChoices', cond); hide($('formMsg')); };
+});
+
+function setUnit(u) {
+  var raw = String(u || 'Each').trim();
+  var m = raw.match(/^([A-Za-z ]+?)\s*\/\s*(\d+)$/);
+  var name = m ? m[1].trim() : raw, per = m ? m[2] : '';
+  var opts = [].map.call($('unitName').options, function (o) { return o.value; });
+  var match = opts.filter(function (o) { return o.toLowerCase() === name.toLowerCase(); })[0];
+  if (match && match !== '__other') { $('unitName').value = match; $('unitOther').value = ''; }
+  else { $('unitName').value = '__other'; $('unitOther').value = name; }
+  $('unitPer').value = per;
+  unitChanged();
+}
+function unitValue() {
+  var name = $('unitName').value === '__other' ? $('unitOther').value.trim() : $('unitName').value;
+  var per = $('unitPer').value.replace(/[^\d]/g, '');
+  if (!name) return '';
+  return per && per !== '1' ? name + '/' + per : name;
+}
+function unitChanged() {
+  $('unitOther').classList.toggle('hidden', $('unitName').value !== '__other');
+  var isEach = $('unitName').value === 'Each';
+  $('unitPer').classList.toggle('hidden', isEach);
+  if (isEach) $('unitPer').value = '';
+  var u = unitValue();
+  $('unitPreview').textContent = u ? 'Students will count by: ' + u + (/\//.test(u) ? ' (whole packages, not the pieces inside)' : '') : '';
+}
+$('unitName').onchange = unitChanged;
+$('unitPer').oninput = function () { this.value = this.value.replace(/[^\d]/g, ''); unitChanged(); };
+$('unitOther').oninput = unitChanged;
+
+function showPhoto() {
+  var box = $('photoBox'); box.innerHTML = '';
+  var src = photo ? photo.url : (ctx.existingImg ? thumb(ctx.existingImg) : (ctx.catalogImg ? thumb(ctx.catalogImg) : ''));
+  if (src) {
+    var img = document.createElement('img'); img.alt = 'Item photo'; img.src = src;
+    img.onerror = function () { box.innerHTML = '<div class="nopic"><b>📷</b>Picture not available</div>'; };
+    box.appendChild(img);
+  } else {
+    box.innerHTML = '<div class="nopic"><b>📷</b>No picture yet. Tap Take photo.</div>';
+  }
+  $('photoBtn').textContent = (photo || ctx.existingImg || ctx.catalogImg) ? '📷 Retake photo' : '📷 Take photo';
+  $('photoClear').classList.toggle('hidden', !photo);
+}
+
+function openForm(r) {
+  photo = null; type = ''; cond = '';
+  hide($('formMsg'));
+  ['desc', 'onHand', 'loc', 'tip', 'cost', 'barcode', 'itemId'].forEach(function (k) { $(k).value = ''; $(k).classList.remove('bad'); });
+  setChoice('typeChoices', ''); setChoice('condChoices', '');
+  $('condBox').classList.add('hidden');
+  setUnit('Each');
+  var status = $('formStatus');
+
+  if (r.inventory) {
+    var it = r.inventory;
+    ctx = { mode: 'update', updateRow: it.row, updateId: it.id, existingImg: it.img };
+    $('formTitle').textContent = 'Update item';
+    setMsg(status, 'Already in your inventory as #' + it.id + '. Changes you save will update it.', 'warn');
+    $('desc').value = it.desc; $('loc').value = it.loc; $('tip').value = it.tip;
+    $('onHand').value = it.onHand === '' ? '' : String(it.onHand);
+    $('cost').value = it.cost === '' ? '' : String(it.cost);
+    $('barcode').value = it.barcode;
+    type = it.type === 'Durable' ? 'Durable' : 'Consumable'; setChoice('typeChoices', type);
+    $('condBox').classList.toggle('hidden', type !== 'Durable');
+    if (CONDITIONS.indexOf(it.cond) !== -1) { cond = it.cond; setChoice('condChoices', cond); }
+    setUnit(it.unit || 'Each');
+    $('itemId').value = it.id; $('itemId').readOnly = true;
+    $('idHelp').textContent = 'Item numbers can\'t be changed here.';
+  } else if (r.catalog) {
+    var c = r.catalog;
+    ctx = { mode: 'new', fromCatalog: true, catalogImg: c.img };
+    $('formTitle').textContent = 'Add district item';
+    setMsg(status, 'Found in the district catalog: stock #' + c.stock + '. Name, unit, cost and picture are filled in.', 'ok');
+    $('desc').value = c.desc;
+    setUnit(c.unit);
+    $('cost').value = c.cost === '' ? '' : Number(c.cost).toFixed(2);
+    $('itemId').value = c.stock; $('itemId').readOnly = true;
+    $('idHelp').textContent = 'District items use their stock number, so it matches FMS orders.';
+    type = c.type === 'Durable' ? 'Durable' : 'Consumable'; setChoice('typeChoices', type);
+    $('condBox').classList.toggle('hidden', type !== 'Durable');
+  } else {
+    ctx = { mode: 'new' };
+    $('formTitle').textContent = 'New item';
+    $('itemId').value = r.nextId || info.nextId || ''; $('itemId').readOnly = false;
+    $('idHelp').textContent = 'This number goes on its label. You can change it, or type a district stock #.';
+    if (r.code) {
+      $('barcode').value = r.code;
+      if (r.product) {
+        $('desc').value = r.product.title;
+        setMsg(status, 'New item. Barcode ' + r.code + ' was found online — check the name below.', 'info');
+      } else {
+        setMsg(status, 'New item. Barcode ' + r.code + ' isn\'t in your inventory or the district catalog.', 'info');
+      }
+    } else {
+      setMsg(status, 'New item with no barcode. It will get number ' + $('itemId').value + ' for its label.', 'info');
+    }
+  }
+  showPhoto();
+  show('formScreen');
+}
+
+/* photo: shrink to ~1000px JPEG before upload */
+$('photoBtn').onclick = function () { $('photoInput').value = ''; $('photoInput').click(); };
+$('photoInput').onchange = function () {
+  var f = this.files && this.files[0];
+  if (!f) return;
+  if (!/^image\//.test(f.type)) { setMsg($('formMsg'), 'That file is not a picture.', 'err'); return; }
+  var reader = new FileReader();
+  reader.onload = function () {
+    var img = new Image();
+    img.onload = function () {
+      var max = 1000, w = img.naturalWidth, h = img.naturalHeight, s = Math.min(1, max / Math.max(w, h));
+      var cv = document.createElement('canvas'); cv.width = Math.round(w * s); cv.height = Math.round(h * s);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      var url = cv.toDataURL('image/jpeg', 0.82);
+      photo = { url: url, type: 'image/jpeg', data: url.split(',')[1] };
+      confirmNoPhoto = false; hide($('formMsg'));
+      showPhoto();
+    };
+    img.onerror = function () { setMsg($('formMsg'), 'That picture could not be opened. Try again.', 'err'); };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(f);
+};
+$('photoClear').onclick = function () { photo = null; showPhoto(); };
+
+function bumpOH(d) {
+  var v = $('onHand').value === '' ? 0 : parseInt($('onHand').value, 10);
+  $('onHand').value = String(Math.max(0, Math.min(9999, v + d)));
+}
+$('ohMinus').onclick = function () { bumpOH(-1); };
+$('ohPlus').onclick = function () { bumpOH(1); };
+$('onHand').oninput = function () { this.value = this.value.replace(/[^\d]/g, '').slice(0, 4); };
+$('scanBarBtn').onclick = function () {
+  startCamera(function (code) {
+    var list = $('barcode').value.split(/[,\s]+/).filter(Boolean);
+    if (list.map(norm).indexOf(norm(code)) === -1) list.push(norm(code));
+    $('barcode').value = list.join(', ');
+  });
+};
+
+$('cancelBtn').onclick = function () { showFind(); };
+
+$('saveBtn').onclick = function () {
+  var m = $('formMsg');
+  ['desc', 'itemId', 'cost', 'unitOther'].forEach(function (k) { $(k).classList.remove('bad'); });
+  var desc = $('desc').value.trim();
+  if (!desc) { $('desc').classList.add('bad'); setMsg(m, 'Type a name for the item.', 'err'); $('desc').focus(); return; }
+  if (!type) { $('typeChoices').classList.add('bad'); setMsg(m, 'Choose Consumable or Durable.', 'err'); return; }
+  if (type === 'Durable' && !cond) { $('condChoices').classList.add('bad'); setMsg(m, 'Choose the condition.', 'err'); return; }
+  var unit = unitValue();
+  if (!unit) { $('unitOther').classList.add('bad'); setMsg(m, 'Type the unit it is counted by.', 'err'); return; }
+  var id = norm($('itemId').value);
+  if (ctx.mode === 'new' && id && !/^[A-Z0-9][A-Z0-9\-.]{1,19}$/.test(id)) { $('itemId').classList.add('bad'); setMsg(m, 'The item number can only have letters, numbers and dashes.', 'err'); return; }
+  var cost = $('cost').value.replace(/[$,\s]/g, '');
+  if (cost && !/^\d+(\.\d{1,2})?$/.test(cost)) { $('cost').classList.add('bad'); setMsg(m, 'Type the cost like 4.25', 'err'); return; }
+  if (!photo && !ctx.existingImg && !ctx.catalogImg) {
+    if (!confirmNoPhoto) { confirmNoPhoto = true; setMsg(m, 'No picture yet. Students find items faster with one. Tap Save item again to save without a picture.', 'warn'); return; }
+  }
+  var btn = this;
+  btn.disabled = true; btn.textContent = photo ? 'Uploading…' : 'Saving…';
+  hide(m);
+  api({
+    action: 'addItem',
+    updateRow: ctx.mode === 'update' ? ctx.updateRow : 0,
+    updateId: ctx.mode === 'update' ? ctx.updateId : '',
+    item: {
+      id: id, desc: desc, type: type, cond: type === 'Durable' ? cond : '', unit: unit,
+      onHand: $('onHand').value, loc: $('loc').value.trim(), tip: $('tip').value.trim(), cost: cost,
+      barcode: $('barcode').value, fromCatalog: !!ctx.fromCatalog, catalogImg: ctx.catalogImg || ''
+    },
+    photo: photo ? { data: photo.data, type: photo.type } : null
+  }).then(function (r) {
+    btn.disabled = false; btn.textContent = 'Save item';
+    confirmNoPhoto = false;
+    if (r.nextId) info.nextId = r.nextId;
+    var l = $('loc').value.trim();
+    if (l && info.locations.indexOf(l) === -1) info.locations.push(l);
+    $('doneTitle').textContent = (r.updated ? 'Updated ' : 'Added ') + '#' + r.id;
+    $('doneText').textContent = r.desc + (r.updated ? ' was updated.' : ' is in your inventory. Print its label from the Sheet: Inventory ▸ Build barcode labels.');
+    show('doneScreen');
+  }).catch(function (e) {
+    btn.disabled = false; btn.textContent = 'Save item';
+    setMsg(m, e.message, 'err');
+  });
+};
+var confirmNoPhoto = false;
+['desc'].forEach(function (k) { $(k).addEventListener('input', function () { confirmNoPhoto = false; }); });
+$('againBtn').onclick = function () { showFind(); };
+
+/* ---------- camera (barcode) ---------- */
+var cam = { stream: null, timer: null, lib: null, on: false, cb: null };
+function camFail(e) {
+  stopCamera();
+  var n = e && e.name;
+  var text = (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError')
+    ? 'The camera is blocked. Tap the camera icon in the address bar and choose Allow, or type the number instead.'
+    : n === 'NotFoundError' ? 'No camera was found on this device. Type the number instead.'
+    : 'The camera could not start. Type the number instead.';
+  var target = $('formScreen').classList.contains('hidden') ? $('findMsg') : $('formMsg');
+  setMsg(target, text, 'err');
+}
+function startCamera(cb) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFail({ name: 'NotFoundError' }); return; }
+  cam.on = true; cam.cb = cb;
+  $('camOverlay').classList.remove('hidden');
+  if ('BarcodeDetector' in window && window.BarcodeDetector.getSupportedFormats) {
+    window.BarcodeDetector.getSupportedFormats().then(function (fmts) {
+      var want = ['code_39', 'code_128', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'itf', 'codabar', 'code_93']
+        .filter(function (f) { return fmts.indexOf(f) !== -1; });
+      if (!want.length) { startLibrary(); return; }
+      startNative(new window.BarcodeDetector({ formats: want }));
+    }).catch(function () { startLibrary(); });
+  } else startLibrary();
+}
+function startNative(detector) {
+  $('camNative').classList.remove('hidden'); $('camLib').classList.add('hidden');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+    .then(function (stream) {
+      if (!cam.on) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      cam.stream = stream;
+      var v = $('camVideo'); v.srcObject = stream;
+      return v.play().then(function () {
+        var busy = false;
+        cam.timer = setInterval(function () {
+          if (busy || !cam.on || v.readyState < 2) return;
+          busy = true;
+          detector.detect(v).then(function (codes) {
+            busy = false;
+            if (codes && codes.length && cam.on) gotCode(codes[0].rawValue);
+          }).catch(function () { busy = false; });
+        }, 200);
+      });
+    }).catch(camFail);
+}
+var libState = 0, libWaiters = [];
+function loadLibrary(cb) {
+  if (window.Html5Qrcode) { cb(true); return; }
+  libWaiters.push(cb);
+  if (libState === 1) return;
+  libState = 1;
+  var s = document.createElement('script'); s.src = LIB_URL;
+  s.onload = function () { libState = 2; libWaiters.splice(0).forEach(function (f) { f(true); }); };
+  s.onerror = function () { libState = 0; libWaiters.splice(0).forEach(function (f) { f(false); }); };
+  document.head.appendChild(s);
+}
+function startLibrary() {
+  $('camNative').classList.add('hidden'); $('camLib').classList.remove('hidden');
+  loadLibrary(function (ok) {
+    if (!cam.on) return;
+    if (!ok || !window.Html5Qrcode) { camFail({ name: 'Other' }); return; }
+    var F = window.Html5QrcodeSupportedFormats || {};
+    var formats = ['CODE_39', 'CODE_128', 'EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'QR_CODE', 'ITF', 'CODABAR', 'CODE_93']
+      .map(function (k) { return F[k]; }).filter(function (v) { return v !== undefined; });
+    try { cam.lib = new window.Html5Qrcode('camLib', formats.length ? { verbose: false, formatsToSupport: formats } : { verbose: false }); }
+    catch (e) { camFail(e); return; }
+    cam.lib.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 140 } },
+      function (text) { if (cam.on) gotCode(text); }, function () {}).catch(camFail);
+  });
+}
+function stopCamera() {
+  cam.on = false;
+  if (cam.timer) { clearInterval(cam.timer); cam.timer = null; }
+  if (cam.stream) { cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
+  var v = $('camVideo'); try { v.pause(); } catch (e) {} v.srcObject = null;
+  if (cam.lib) { var lib = cam.lib; cam.lib = null; try { lib.stop().then(function () { try { lib.clear(); } catch (e) {} }).catch(function () {}); } catch (e) {} }
+  $('camOverlay').classList.add('hidden');
+}
+function gotCode(raw) {
+  var cb = cam.cb;
+  stopCamera();
+  try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) {}
+  if (cb) cb(String(raw));
+}
+$('camStop').onclick = stopCamera;
+
+/* ---------- start ---------- */
+(function () {
+  var saved = '';
+  try { saved = localStorage.getItem(PIN_KEY) || ''; } catch (e) {}
+  if (saved) { show('pinScreen'); $('pin').value = ''; unlock(saved, true); }
+  else show('pinScreen');
+})();
+</script>
+</body>
+</html>
