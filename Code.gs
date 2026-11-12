@@ -700,11 +700,11 @@ function authorizeAddItem() {
 function setAddItemPin() {
   const ui = SpreadsheetApp.getUi();
   const r = ui.prompt('Set Add Item PIN',
-    'Type a PIN of 4–8 digits. You enter it once on each device that uses the Add Item page.\n' +
+    'Type a PIN of 4–12 letters or numbers (capitals don\'t matter). You enter it once on each device that uses the Add Item page.\n' +
     'Changing it signs out every device.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
-  const pin = r.getResponseText().trim();
-  if (!/^\d{4,8}$/.test(pin)) return ui.alert('The PIN must be 4 to 8 digits. Nothing was changed.');
+  const pin = r.getResponseText().trim().toLowerCase();
+  if (!/^[a-z0-9]{4,12}$/.test(pin)) return ui.alert('The PIN must be 4 to 12 letters or numbers. Nothing was changed.');
   PropertiesService.getScriptProperties().setProperty('ADD_PIN', pin);
   toast_('Add Item PIN saved.');
 }
@@ -725,7 +725,7 @@ function showAddItemLink() {
 function checkPin_(pin) {
   const want = PropertiesService.getScriptProperties().getProperty('ADD_PIN');
   if (!want) throw new Error('No Add Item PIN has been set yet. In the Sheet choose Inventory ▸ Set Add Item PIN.');
-  if (String(pin || '').trim() !== want) {
+  if (String(pin || '').trim().toLowerCase() !== String(want).toLowerCase()) {
     Utilities.sleep(800); // slows down guessing
     throw new Error('That PIN is not right.');
   }
