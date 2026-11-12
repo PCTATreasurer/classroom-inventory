@@ -55,6 +55,7 @@
   .result { display: flex; width: 100%; text-align: left; gap: 10px; align-items: center; background: #fff;
     border: 2px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 17px; cursor: pointer; color: var(--ink); }
   .result:hover { border-color: var(--blue); }
+  .more { width: 100%; margin-top: 10px; background: #fff; color: var(--blue); border: 2px solid var(--blue); }
   .result small { color: var(--muted); display: block; font-size: 14px; }
   .done-list { margin: 8px 0 0; padding: 0; list-style: none; }
   .done-list li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
@@ -359,8 +360,13 @@ function findTyped() {
     return;
   }
   if (hits.length === 1) { openItem(hits[0].id, 'scan'); return; }
-  setMsg($('scanMsg'), hits.length > 8 ? 'Many items match. Tap the right one or type more of the name.' : 'Tap the item you are counting:', 'warn');
-  hits.slice(0, 8).forEach(function (it) {
+  setMsg($('scanMsg'), hits.length + ' items match. Tap the one you are counting' + (hits.length > 8 ? ', tap More, or type more of the name.' : ':'), 'warn');
+  showHits(hits, 0);
+}
+var PAGE = 8;
+function showHits(hits, from) {
+  var old = $('moreBtn'); if (old) old.remove();
+  hits.slice(from, from + PAGE).forEach(function (it) {
     var b = document.createElement('button'); b.type = 'button'; b.className = 'result';
     var t = document.createElement('span');
     t.textContent = it.desc;
@@ -369,6 +375,13 @@ function findTyped() {
     b.onclick = function () { openItem(it.id, 'scan'); };
     $('results').appendChild(b);
   });
+  var left = hits.length - (from + PAGE);
+  if (left > 0) {
+    var m = document.createElement('button'); m.type = 'button'; m.id = 'moreBtn'; m.className = 'btn more';
+    m.textContent = 'More (' + left + ' more)';
+    m.onclick = function () { showHits(hits, from + PAGE); };
+    $('results').appendChild(m);
+  }
 }
 $('findBtn').onclick = findTyped;
 $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); findTyped(); } });
