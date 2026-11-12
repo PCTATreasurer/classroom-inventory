@@ -98,7 +98,7 @@
     <p class="muted">For your teacher account only. Enter your Add Item PIN to continue.</p>
     <div class="card">
       <label class="field" for="pin">PIN</label>
-      <input type="password" id="pin" inputmode="numeric" autocomplete="off" maxlength="8">
+      <input type="password" id="pin" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="12">
       <div id="pinMsg" class="msg hidden" role="alert"></div>
       <div class="row"><button class="btn wide" id="pinBtn" type="button">Unlock</button></div>
       <p class="muted" style="margin-top:12px">Set or change the PIN in the Sheet: Inventory ▸ Set Add Item PIN. This device will remember it.</p>
@@ -281,7 +281,7 @@ function unlock(p, quiet) {
 }
 $('pinBtn').onclick = function () {
   var p = $('pin').value.trim();
-  if (!/^\d{4,8}$/.test(p)) { setMsg($('pinMsg'), 'The PIN is 4 to 8 digits.', 'err'); return; }
+  if (!/^[A-Za-z0-9]{4,12}$/.test(p)) { setMsg($('pinMsg'), 'The PIN is 4 to 12 letters or numbers.', 'err'); return; }
   hide($('pinMsg'));
   unlock(p, false);
 };
